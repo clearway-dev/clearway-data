@@ -10,8 +10,8 @@ import { sendMeasurementData } from './services/api';
 const testData: MeasurementData = {
   latitude: 49.8175,
   longitude: 15.4730,
-  left_widht: 2.5,
-  right_widht: 2.8,
+  left_width: 2.5,
+  right_width: 2.8,
   timestamp: new Date().toISOString(),
 };
 

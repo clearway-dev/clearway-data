@@ -6,8 +6,8 @@ import { Text } from './ui/Text';
 export interface MeasurementData {
   latitude: number;
   longitude: number;
-  left_widht: number;
-  right_widht: number;
+  left_width: number;
+  right_width: number;
   timestamp: string;
 }
 
@@ -34,12 +34,12 @@ export const DataDisplay: React.FC<DataDisplayProps> = ({ data }) => {
       
       <View style={styles.dataRow}>
         <Text variant="label">Šířka vlevo:</Text>
-        <Text variant="body" style={styles.value}>{data.left_widht} m</Text>
+        <Text variant="body" style={styles.value}>{data.left_width} m</Text>
       </View>
       
       <View style={styles.dataRow}>
         <Text variant="label">Šířka vpravo:</Text>
-        <Text variant="body" style={styles.value}>{data.right_widht} m</Text>
+        <Text variant="body" style={styles.value}>{data.right_width} m</Text>
       </View>
       
       <View style={styles.dataRow}>
