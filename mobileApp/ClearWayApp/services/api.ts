@@ -2,7 +2,7 @@ import { MeasurementData } from '../components/DataDisplay';
 
 // Configuration for API endpoint
 // Use your computer's IP address instead of localhost for Expo to work
-const API_BASE_URL = 'http://192.168.20.36:8000';
+const API_BASE_URL = 'http://10.0.1.16:8000';
 const MEASUREMENTS_ENDPOINT = '/api/v1/measurements';
 
 export interface ApiResponse {
