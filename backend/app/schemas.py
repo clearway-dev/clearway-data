@@ -3,7 +3,7 @@ Pydantic schemas for request/response validation.
 Provides strict validation for incoming data from mobile app and responses to frontend.
 """
 from pydantic import BaseModel, Field, field_validator
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -15,7 +15,7 @@ from uuid import UUID
 class VehicleBase(BaseModel):
     """Base schema for vehicle data"""
     vehicle_name: str = Field(..., min_length=1, max_length=100, description="Vehicle name/identifier")
-    width: float = Field(..., gt=0, description="Vehicle width in meters")
+    width: float = Field(..., gt=0, description="Vehicle width in centimeters")
 
 
 class VehicleCreate(VehicleBase):
@@ -80,6 +80,19 @@ class SessionResponse(BaseModel):
 # RAW MEASUREMENT SCHEMAS
 # ==============================================
 
+class RawMeasurementCreateLax(BaseModel):
+    """
+    Lax schema for receiving raw measurement data from mobile app.
+    No strict validation - allows storing invalid data with is_valid=false.
+    """
+    session_id: UUID = Field(..., description="ID of the measurement session")
+    measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
+    latitude: float = Field(..., description="Latitude in decimal degrees")
+    longitude: float = Field(..., description="Longitude in decimal degrees")
+    distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
+
+
 class RawMeasurementCreate(BaseModel):
     """
     Schema for receiving raw measurement data from mobile app.
@@ -88,20 +101,48 @@ class RawMeasurementCreate(BaseModel):
     session_id: UUID = Field(..., description="ID of the measurement session")
     measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
     
-    # GPS validation - coordinates must be within valid ranges
+    # GPS validation World - coordinates must be within valid ranges 
     latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude in decimal degrees")
     longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude in decimal degrees")
+
+    # # GPS validation Europe - coordinates must be within valid ranges 
+    # latitude: float = Field(..., ge=34.0, le=81.0, description="Latitude in decimal degrees")
+    # longitude: float = Field(..., ge=-25, le=40, description="Longitude in decimal degrees")
+
+    # # GPS validation Czech Republic - coordinates must be within valid ranges 
+    # latitude: float = Field(..., ge=48.5, le=51.1, description="Latitude in decimal degrees")
+    # longitude: float = Field(..., ge=12.0, le=18.9, description="Longitude in decimal degrees")
+
+    # # GPS validation Pilsen - coordinates must be within valid ranges 
+    # latitude: float = Field(..., ge=49.6, le=50.1, description="Latitude in decimal degrees")
+    # longitude: float = Field(..., ge=12.8, le=13.5, description="Longitude in decimal degrees")
     
     # Distance validation - must be non-negative
-    distance_left: float = Field(..., ge=0, description="Distance to left obstacle in meters")
-    distance_right: float = Field(..., ge=0, description="Distance to right obstacle in meters")
-    
+    distance_left: float = Field(..., ge=0, description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., ge=0, description="Distance to right obstacle in centimeters")
+
+    @field_validator('measured_at')
+    @classmethod
+    def validate_timestamp(cls, v: datetime) -> datetime:
+        """Validate that timestamp is not from the future (with 5 min tolerance for clock skew)"""
+        now = datetime.now(timezone.utc)
+        # Allow 5 minutes tolerance for clock synchronization issues
+        max_allowed = now + timedelta(minutes=5)
+        
+        # Make timestamp timezone-aware if it isn't
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        
+        if v > max_allowed:
+            raise ValueError(f'Timestamp cannot be from the future. Current time: {now.isoformat()}, received: {v.isoformat()}')
+        return v
+
     @field_validator('distance_left', 'distance_right')
     @classmethod
     def validate_distances(cls, v: float) -> float:
-        """Additional validation: distances should be reasonable (< 50m)"""
-        if v > 50.0:
-            raise ValueError('Distance measurement seems unrealistic (> 50m)')
+        """Additional validation: distances should be reasonable (< 150m)"""
+        if v > 15000.0:  # 150m 
+            raise ValueError('Distance measurement seems unrealistic (> 150m)')
         return v
     
     class Config:
@@ -111,10 +152,56 @@ class RawMeasurementCreate(BaseModel):
                 "measured_at": "2026-02-24T10:30:00.000Z",
                 "latitude": 49.8175,
                 "longitude": 15.4730,
-                "distance_left": 2.5,
-                "distance_right": 2.8
+                "distance_left": 250,
+                "distance_right": 380
             }
         }
+
+
+def validate_measurement_data(data: RawMeasurementCreateLax) -> tuple[bool, str | None]:
+    """
+    Manually validate measurement data and return validation status.
+    
+    Returns:
+        tuple[bool, str | None]: (is_valid, error_message)
+    """
+    errors = []
+    
+    # Validate GPS coordinates
+    if not (-90.0 <= data.latitude <= 90.0):
+        errors.append(f"Invalid latitude: {data.latitude} (must be between -90 and 90)")
+    
+    if not (-180.0 <= data.longitude <= 180.0):
+        errors.append(f"Invalid longitude: {data.longitude} (must be between -180 and 180)")
+    
+    # Validate distances
+    if data.distance_left < 0:
+        errors.append(f"Invalid distance_left: {data.distance_left} (must be >= 0)")
+    
+    if data.distance_right < 0:
+        errors.append(f"Invalid distance_right: {data.distance_right} (must be >= 0)")
+    
+    if data.distance_left > 15000.0:
+        errors.append(f"Unrealistic distance_left: {data.distance_left} cm (> 150m)")
+    
+    if data.distance_right > 15000.0:
+        errors.append(f"Unrealistic distance_right: {data.distance_right} cm (> 150m)")
+    
+    # Validate timestamp
+    now = datetime.now(timezone.utc)
+    max_allowed = now + timedelta(minutes=5)
+    measured_at = data.measured_at
+    
+    if measured_at.tzinfo is None:
+        measured_at = measured_at.replace(tzinfo=timezone.utc)
+    
+    if measured_at > max_allowed:
+        errors.append(f"Timestamp from future: {measured_at.isoformat()} (current: {now.isoformat()})")
+    
+    if errors:
+        return False, "; ".join(errors)
+    
+    return True, None
 
 
 class RawMeasurementResponse(BaseModel):
@@ -155,8 +242,8 @@ class BatchMeasurementCreate(BaseModel):
                         "measured_at": "2026-02-24T10:30:00.000Z",
                         "latitude": 49.8175,
                         "longitude": 15.4730,
-                        "distance_left": 2.5,
-                        "distance_right": 2.8
+                        "distance_left": 250,
+                        "distance_right": 380
                     }
                 ]
             }

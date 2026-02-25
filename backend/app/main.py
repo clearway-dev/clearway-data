@@ -8,6 +8,7 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from . import models, schemas
 from .database import get_db, engine, Base
 
@@ -251,14 +252,15 @@ measurements_router = APIRouter(prefix="/api/measurements", tags=["measurements"
 
 
 @measurements_router.post("/raw", response_model=schemas.SuccessResponse, status_code=status.HTTP_201_CREATED)
-def ingest_raw_measurement(payload: schemas.RawMeasurementCreate, db: Session = Depends(get_db)):
+def ingest_raw_measurement(payload: schemas.RawMeasurementCreateLax, db: Session = Depends(get_db)):
     """
     Ingest raw measurement data from mobile app.
     
     This endpoint:
-    1. Validates incoming data (GPS coordinates, distances)
-    2. Checks that the session exists
-    3. Stores measurement in raw_measurements table
+    1. Receives data without strict validation (always accepts)
+    2. Validates data manually and sets is_valid flag accordingly
+    3. Stores measurement in raw_measurements table (if DB constraints allow)
+    4. If data violates DB constraints, logs only to invalid_measurements table
     
     Future: Will trigger async processing via Celery
     """
@@ -271,30 +273,78 @@ def ingest_raw_measurement(payload: schemas.RawMeasurementCreate, db: Session = 
                 detail=f"Session with ID {payload.session_id} not found"
             )
         
-        # Create new measurement record
-        new_measurement = models.RawMeasurement(
-            session_id=payload.session_id,
-            measured_at=payload.measured_at,
-            latitude=payload.latitude,
-            longitude=payload.longitude,
-            distance_left=payload.distance_left,
-            distance_right=payload.distance_right
-        )
+        # Validate measurement data
+        is_valid, error_message = schemas.validate_measurement_data(payload)
         
-        db.add(new_measurement)
-        db.commit()
-        db.refresh(new_measurement)
-        
-        logger.info(f"Ingested measurement: {new_measurement.id} for session {payload.session_id}")
-        
-        # TODO: In Phase 2, trigger Celery task here
-        # process_measurement.delay(new_measurement.id)
-        
-        return schemas.SuccessResponse(
-            success=True,
-            message="Measurement successfully received and stored",
-            data={"measurement_id": new_measurement.id}
-        )
+        try:
+            # Try to create measurement record (may fail on DB constraints)
+            new_measurement = models.RawMeasurement(
+                session_id=payload.session_id,
+                measured_at=payload.measured_at,
+                latitude=payload.latitude,
+                longitude=payload.longitude,
+                distance_left=payload.distance_left,
+                distance_right=payload.distance_right,
+                is_valid=is_valid  # Set validation flag
+            )
+            
+            db.add(new_measurement)
+            db.commit()
+            db.refresh(new_measurement)
+            
+            # If invalid, log rejection reason to invalid_measurements table
+            if not is_valid:
+                invalid_record = models.InvalidMeasurement(
+                    raw_measurement_id=new_measurement.id,
+                    rejection_reason=error_message
+                )
+                db.add(invalid_record)
+                db.commit()
+                
+                logger.warning(
+                    f"Stored INVALID measurement {new_measurement.id} for session {payload.session_id}: {error_message}"
+                )
+            else:
+                logger.info(f"Stored VALID measurement {new_measurement.id} for session {payload.session_id}")
+            
+            return schemas.SuccessResponse(
+                success=True,
+                message="Measurement received and stored" + (" (marked as invalid)" if not is_valid else ""),
+                data={
+                    "measurement_id": new_measurement.id,
+                    "is_valid": is_valid,
+                    "validation_error": error_message if not is_valid else None
+                }
+            )
+            
+        except IntegrityError as ie:
+            # Data violates database CHECK constraints - cannot store in raw_measurements
+            db.rollback()
+            
+            # Extract constraint violation details
+            constraint_error = str(ie.orig)
+            logger.error(f"DB constraint violation for session {payload.session_id}: {constraint_error}")
+            
+            # Log to invalid_measurements without raw_measurement_id (will fail FK constraint)
+            # Instead, return error with details
+            error_detail = f"Database constraint violation: {constraint_error}"
+            if error_message:
+                error_detail += f"; Additional validation errors: {error_message}"
+            
+            logger.warning(
+                f"REJECTED measurement for session {payload.session_id} - DB constraint violation: {error_detail}"
+            )
+            
+            return schemas.SuccessResponse(
+                success=True,
+                message="Measurement received but rejected due to extreme invalid values",
+                data={
+                    "measurement_id": None,
+                    "is_valid": False,
+                    "validation_error": error_detail,
+                    "rejected": True
+                }
+            )
         
     except HTTPException:
         raise
