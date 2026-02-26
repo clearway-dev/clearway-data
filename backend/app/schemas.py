@@ -224,13 +224,66 @@ class RawMeasurementResponse(BaseModel):
 # BATCH MEASUREMENT SCHEMAS
 # ==============================================
 
+class MeasurementItem(BaseModel):
+    """
+    Single measurement item for batch upload (without session_id).
+    Used in offline-first architecture where mobile app collects data and sends in batches.
+    """
+    measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude in decimal degrees")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude in decimal degrees")
+    distance_left: float = Field(..., ge=0, description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., ge=0, description="Distance to right obstacle in centimeters")
+    
+    @field_validator('measured_at')
+    @classmethod
+    def validate_timestamp(cls, v: datetime) -> datetime:
+        """Validate that timestamp is not from the future (with 5 min tolerance for clock skew)"""
+        now = datetime.now(timezone.utc)
+        max_allowed = now + timedelta(minutes=5)
+        
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        
+        if v > max_allowed:
+            raise ValueError(f'Timestamp cannot be from the future')
+        return v
+    
+    @field_validator('distance_left', 'distance_right')
+    @classmethod
+    def validate_distances(cls, v: float) -> float:
+        """Additional validation: distances should be reasonable (< 150m)"""
+        if v > 15000.0:  # 150m in cm
+            raise ValueError(f'Distance measurement seems unrealistic (> 150m)')
+        return v
+
+
+class MeasurementItemLax(BaseModel):
+    """
+    Single measurement item without strict validation for batch upload.
+    Allows storing invalid data with is_valid=false flag.
+    """
+    measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
+    latitude: float = Field(..., description="Latitude in decimal degrees")
+    longitude: float = Field(..., description="Longitude in decimal degrees")
+    distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
+
+
 class BatchMeasurementCreate(BaseModel):
     """
     Schema for receiving multiple measurements at once from mobile app.
-    This is useful when mobile app collects data offline and sends in batches.
+    This is the PRIMARY endpoint for offline-first mobile architecture.
+    
+    Mobile app collects measurements offline and sends them in one batch.
     """
     session_id: UUID = Field(..., description="ID of the measurement session")
-    measurements: list[RawMeasurementCreate] = Field(..., min_length=1, max_length=1000, description="List of measurements")
+    measurements: list[MeasurementItem] = Field(
+        ..., 
+        min_length=1, 
+        max_length=10000, 
+        description="List of measurements (max 10,000 per batch)"
+    )
     
     class Config:
         json_schema_extra = {
@@ -238,16 +291,48 @@ class BatchMeasurementCreate(BaseModel):
                 "session_id": "550e8400-e29b-41d4-a716-446655440000",
                 "measurements": [
                     {
-                        "session_id": "550e8400-e29b-41d4-a716-446655440000",
                         "measured_at": "2026-02-24T10:30:00.000Z",
                         "latitude": 49.8175,
                         "longitude": 15.4730,
                         "distance_left": 250,
                         "distance_right": 380
+                    },
+                    {
+                        "measured_at": "2026-02-24T10:30:01.000Z",
+                        "latitude": 49.8176,
+                        "longitude": 15.4731,
+                        "distance_left": 255,
+                        "distance_right": 385
                     }
                 ]
             }
         }
+
+
+class BatchMeasurementCreateLax(BaseModel):
+    """
+    Schema for receiving multiple measurements with lax validation.
+    Accepts all data and marks invalid entries with is_valid=false.
+    """
+    session_id: UUID = Field(..., description="ID of the measurement session")
+    measurements: list[MeasurementItemLax] = Field(
+        ..., 
+        min_length=1, 
+        max_length=10000, 
+        description="List of measurements (max 10,000 per batch)"
+    )
+
+
+class BatchMeasurementResponse(BaseModel):
+    """Response for batch measurement upload"""
+    success: bool = Field(..., description="Overall success status")
+    message: str = Field(..., description="Summary message")
+    total_received: int = Field(..., description="Total measurements received")
+    total_stored: int = Field(..., description="Total measurements successfully stored")
+    total_invalid: int = Field(..., description="Total measurements marked as invalid")
+    total_rejected: int = Field(..., description="Total measurements rejected (DB constraint violations)")
+    invalid_indices: list[int] = Field(default_factory=list, description="Indices of invalid measurements")
+    rejected_indices: list[int] = Field(default_factory=list, description="Indices of rejected measurements")
 
 
 # ==============================================

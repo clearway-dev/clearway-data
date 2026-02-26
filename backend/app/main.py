@@ -377,6 +377,153 @@ def get_recent_measurements(limit: int = 100, db: Session = Depends(get_db)):
         )
 
 
+@measurements_router.post("/batch", response_model=schemas.BatchMeasurementResponse, status_code=status.HTTP_201_CREATED)
+def ingest_batch_measurements(payload: schemas.BatchMeasurementCreateLax, db: Session = Depends(get_db)):
+    """
+    Ingest batch of measurements from mobile app (OFFLINE-FIRST ARCHITECTURE).
+    
+    This is the PRIMARY endpoint for mobile data ingestion.
+    Mobile app collects measurements offline and sends them as a single batch.
+    
+    This endpoint:
+    1. Validates session existence
+    2. Performs bulk validation of all measurements
+    3. Uses efficient bulk insert (db.add_all()) for valid measurements
+    4. Marks invalid measurements with is_valid=false
+    5. Logs rejection reasons to invalid_measurements table
+    
+    Performance: Can handle up to 10,000 measurements per request.
+    
+    Args:
+        payload: BatchMeasurementCreateLax containing session_id and list of measurements
+        db: Database session dependency
+        
+    Returns:
+        BatchMeasurementResponse with statistics about processed measurements
+    """
+    try:
+        # Verify session exists
+        db_session = db.query(models.Session).filter(models.Session.id == payload.session_id).first()
+        if not db_session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session with ID {payload.session_id} not found"
+            )
+        
+        total_received = len(payload.measurements)
+        total_stored = 0
+        total_invalid = 0
+        total_rejected = 0
+        invalid_indices = []
+        rejected_indices = []
+        
+        # Prepare list for bulk insert
+        measurements_to_insert = []
+        invalid_records_to_insert = []
+        measurement_index_map = {}  # Maps original index to measurement object
+        
+        logger.info(f"Processing batch of {total_received} measurements for session {payload.session_id}")
+        
+        # Process each measurement
+        for idx, measurement in enumerate(payload.measurements):
+            # Convert to RawMeasurementCreateLax for validation
+            measurement_data = schemas.RawMeasurementCreateLax(
+                session_id=payload.session_id,
+                measured_at=measurement.measured_at,
+                latitude=measurement.latitude,
+                longitude=measurement.longitude,
+                distance_left=measurement.distance_left,
+                distance_right=measurement.distance_right
+            )
+            
+            # Validate measurement (logical validation only - does not prevent storage)
+            is_valid, error_message = schemas.validate_measurement_data(measurement_data)
+            
+            # Create measurement object for bulk insert
+            # NOTE: DB has no CHECK constraints, so ALL values can be stored
+            # is_valid flag indicates logical validity (used in data cleaning pipeline)
+            new_measurement = models.RawMeasurement(
+                session_id=payload.session_id,
+                measured_at=measurement.measured_at,
+                latitude=measurement.latitude,
+                longitude=measurement.longitude,
+                distance_left=measurement.distance_left,
+                distance_right=measurement.distance_right,
+                is_valid=is_valid
+            )
+            
+            measurements_to_insert.append(new_measurement)
+            measurement_index_map[idx] = new_measurement
+            
+            if not is_valid:
+                total_invalid += 1
+                invalid_indices.append(idx)
+                # Store error message for later (will need measurement_id after insert)
+                invalid_records_to_insert.append({
+                    'index': idx,
+                    'error': error_message
+                })
+        
+        # Perform BULK INSERT (efficient!)
+        if measurements_to_insert:
+            try:
+                db.add_all(measurements_to_insert)
+                db.flush()  # Flush to get IDs without committing
+                
+                total_stored = len(measurements_to_insert)
+                
+                # Now create invalid_measurement records if needed
+                if invalid_records_to_insert:
+                    invalid_records = []
+                    for record_info in invalid_records_to_insert:
+                        idx = record_info['index']
+                        measurement_obj = measurement_index_map[idx]
+                        
+                        invalid_record = models.InvalidMeasurement(
+                            raw_measurement_id=measurement_obj.id,
+                            rejection_reason=record_info['error']
+                        )
+                        invalid_records.append(invalid_record)
+                    
+                    db.add_all(invalid_records)
+                
+                db.commit()
+                
+                logger.info(
+                    f"Batch processed: {total_stored} stored ({total_invalid} invalid, {total_rejected} rejected) "
+                    f"for session {payload.session_id}"
+                )
+                
+            except IntegrityError as ie:
+                db.rollback()
+                logger.error(f"Bulk insert failed - likely foreign key violation: {str(ie)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Database constraint violation - check that session_id exists: {str(ie)}"
+                )
+        
+        return schemas.BatchMeasurementResponse(
+            success=True,
+            message=f"Batch processed: {total_stored}/{total_received} measurements stored",
+            total_received=total_received,
+            total_stored=total_stored,
+            total_invalid=total_invalid,
+            total_rejected=total_rejected,
+            invalid_indices=invalid_indices,
+            rejected_indices=rejected_indices
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error processing batch: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process batch: {str(e)}"
+        )
+
+
 # ==============================================
 # REGISTER ROUTERS
 # ==============================================
