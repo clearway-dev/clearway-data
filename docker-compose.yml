@@ -13,12 +13,27 @@ services:
     environment:
       # We construct the connection string dynamically from .env variables
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+      CELERY_BROKER_URL: redis://clearway-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://clearway-redis:6379/0
     restart: unless-stopped
     # Load env variables specifically for this service (optional but good practice)
     env_file:
       - .env
     # Parametr --reload zajistí, že Uvicorn sám restartuje server při změně kódu
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - clearway-network
+
+  # ---------------------------------------------------------------------------
+  # REDIS SERVICE (Celery broker/result backend)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: clearway-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    restart: unless-stopped
     networks:
       - clearway-network
 

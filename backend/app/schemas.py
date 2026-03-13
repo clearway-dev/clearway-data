@@ -1,9 +1,9 @@
 """
 Pydantic schemas for request/response validation.
-Provides strict validation for incoming data from mobile app and responses to frontend.
+Provides structural validation for incoming data from mobile app and responses to frontend.
 """
-from pydantic import BaseModel, Field, field_validator
-from datetime import datetime, timedelta, timezone
+from pydantic import BaseModel, Field
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -96,54 +96,14 @@ class RawMeasurementCreateLax(BaseModel):
 class RawMeasurementCreate(BaseModel):
     """
     Schema for receiving raw measurement data from mobile app.
-    Includes strict validation for GPS coordinates and distance measurements.
+    Structural validation only (types + required fields).
     """
     session_id: UUID = Field(..., description="ID of the measurement session")
     measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
-    
-    # GPS validation World - coordinates must be within valid ranges 
-    latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude in decimal degrees")
-    longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude in decimal degrees")
-
-    # # GPS validation Europe - coordinates must be within valid ranges 
-    # latitude: float = Field(..., ge=34.0, le=81.0, description="Latitude in decimal degrees")
-    # longitude: float = Field(..., ge=-25, le=40, description="Longitude in decimal degrees")
-
-    # # GPS validation Czech Republic - coordinates must be within valid ranges 
-    # latitude: float = Field(..., ge=48.5, le=51.1, description="Latitude in decimal degrees")
-    # longitude: float = Field(..., ge=12.0, le=18.9, description="Longitude in decimal degrees")
-
-    # # GPS validation Pilsen - coordinates must be within valid ranges 
-    # latitude: float = Field(..., ge=49.6, le=50.1, description="Latitude in decimal degrees")
-    # longitude: float = Field(..., ge=12.8, le=13.5, description="Longitude in decimal degrees")
-    
-    # Distance validation - must be non-negative
-    distance_left: float = Field(..., ge=0, description="Distance to left obstacle in centimeters")
-    distance_right: float = Field(..., ge=0, description="Distance to right obstacle in centimeters")
-
-    @field_validator('measured_at')
-    @classmethod
-    def validate_timestamp(cls, v: datetime) -> datetime:
-        """Validate that timestamp is not from the future (with 5 min tolerance for clock skew)"""
-        now = datetime.now(timezone.utc)
-        # Allow 5 minutes tolerance for clock synchronization issues
-        max_allowed = now + timedelta(minutes=5)
-        
-        # Make timestamp timezone-aware if it isn't
-        if v.tzinfo is None:
-            v = v.replace(tzinfo=timezone.utc)
-        
-        if v > max_allowed:
-            raise ValueError(f'Timestamp cannot be from the future. Current time: {now.isoformat()}, received: {v.isoformat()}')
-        return v
-
-    @field_validator('distance_left', 'distance_right')
-    @classmethod
-    def validate_distances(cls, v: float) -> float:
-        """Additional validation: distances should be reasonable (< 150m)"""
-        if v > 15000.0:  # 150m 
-            raise ValueError('Distance measurement seems unrealistic (> 150m)')
-        return v
+    latitude: float = Field(..., description="Latitude in decimal degrees")
+    longitude: float = Field(..., description="Longitude in decimal degrees")
+    distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
     
     class Config:
         json_schema_extra = {
@@ -156,53 +116,6 @@ class RawMeasurementCreate(BaseModel):
                 "distance_right": 380
             }
         }
-
-
-def validate_measurement_data(data: RawMeasurementCreateLax) -> tuple[bool, str | None]:
-    """
-    Manually validate measurement data and return validation status.
-    
-    Returns:
-        tuple[bool, str | None]: (is_valid, error_message)
-    """
-    errors = []
-    
-    # Validate GPS coordinates
-    if not (-90.0 <= data.latitude <= 90.0):
-        errors.append(f"Invalid latitude: {data.latitude} (must be between -90 and 90)")
-    
-    if not (-180.0 <= data.longitude <= 180.0):
-        errors.append(f"Invalid longitude: {data.longitude} (must be between -180 and 180)")
-    
-    # Validate distances
-    if data.distance_left < 0:
-        errors.append(f"Invalid distance_left: {data.distance_left} (must be >= 0)")
-    
-    if data.distance_right < 0:
-        errors.append(f"Invalid distance_right: {data.distance_right} (must be >= 0)")
-    
-    if data.distance_left > 15000.0:
-        errors.append(f"Unrealistic distance_left: {data.distance_left} cm (> 150m)")
-    
-    if data.distance_right > 15000.0:
-        errors.append(f"Unrealistic distance_right: {data.distance_right} cm (> 150m)")
-    
-    # Validate timestamp
-    now = datetime.now(timezone.utc)
-    max_allowed = now + timedelta(minutes=5)
-    measured_at = data.measured_at
-    
-    if measured_at.tzinfo is None:
-        measured_at = measured_at.replace(tzinfo=timezone.utc)
-    
-    if measured_at > max_allowed:
-        errors.append(f"Timestamp from future: {measured_at.isoformat()} (current: {now.isoformat()})")
-    
-    if errors:
-        return False, "; ".join(errors)
-    
-    return True, None
-
 
 class RawMeasurementResponse(BaseModel):
     """Schema for raw measurement response"""
@@ -230,32 +143,10 @@ class MeasurementItem(BaseModel):
     Used in offline-first architecture where mobile app collects data and sends in batches.
     """
     measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
-    latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude in decimal degrees")
-    longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude in decimal degrees")
-    distance_left: float = Field(..., ge=0, description="Distance to left obstacle in centimeters")
-    distance_right: float = Field(..., ge=0, description="Distance to right obstacle in centimeters")
-    
-    @field_validator('measured_at')
-    @classmethod
-    def validate_timestamp(cls, v: datetime) -> datetime:
-        """Validate that timestamp is not from the future (with 5 min tolerance for clock skew)"""
-        now = datetime.now(timezone.utc)
-        max_allowed = now + timedelta(minutes=5)
-        
-        if v.tzinfo is None:
-            v = v.replace(tzinfo=timezone.utc)
-        
-        if v > max_allowed:
-            raise ValueError(f'Timestamp cannot be from the future')
-        return v
-    
-    @field_validator('distance_left', 'distance_right')
-    @classmethod
-    def validate_distances(cls, v: float) -> float:
-        """Additional validation: distances should be reasonable (< 150m)"""
-        if v > 15000.0:  # 150m in cm
-            raise ValueError(f'Distance measurement seems unrealistic (> 150m)')
-        return v
+    latitude: float = Field(..., description="Latitude in decimal degrees")
+    longitude: float = Field(..., description="Longitude in decimal degrees")
+    distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
 
 
 class MeasurementItemLax(BaseModel):

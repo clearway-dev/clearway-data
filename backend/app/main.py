@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from . import models, schemas
+from .tasks import process_batch_task
 from .database import get_db, engine, Base
 
 # Configure logging
@@ -257,10 +258,9 @@ def ingest_raw_measurement(payload: schemas.RawMeasurementCreateLax, db: Session
     Ingest raw measurement data from mobile app.
     
     This endpoint:
-    1. Receives data without strict validation (always accepts)
-    2. Validates data manually and sets is_valid flag accordingly
-    3. Stores measurement in raw_measurements table (if DB constraints allow)
-    4. If data violates DB constraints, logs only to invalid_measurements table
+    1. Accepts structurally valid payload (Pydantic handles 422 for bad structure)
+    2. Stores data into raw_measurements
+    3. Queues async post-processing task in Celery
     
     Future: Will trigger async processing via Celery
     """
@@ -273,11 +273,7 @@ def ingest_raw_measurement(payload: schemas.RawMeasurementCreateLax, db: Session
                 detail=f"Session with ID {payload.session_id} not found"
             )
         
-        # Validate measurement data
-        is_valid, error_message = schemas.validate_measurement_data(payload)
-        
         try:
-            # Try to create measurement record (may fail on DB constraints)
             new_measurement = models.RawMeasurement(
                 session_id=payload.session_id,
                 measured_at=payload.measured_at,
@@ -285,65 +281,34 @@ def ingest_raw_measurement(payload: schemas.RawMeasurementCreateLax, db: Session
                 longitude=payload.longitude,
                 distance_left=payload.distance_left,
                 distance_right=payload.distance_right,
-                is_valid=is_valid  # Set validation flag
+                is_valid=True
             )
             
             db.add(new_measurement)
+            db.flush()
+
+            process_batch_task.delay([new_measurement.id])
+
             db.commit()
             db.refresh(new_measurement)
-            
-            # If invalid, log rejection reason to invalid_measurements table
-            if not is_valid:
-                invalid_record = models.InvalidMeasurement(
-                    raw_measurement_id=new_measurement.id,
-                    rejection_reason=error_message
-                )
-                db.add(invalid_record)
-                db.commit()
-                
-                logger.warning(
-                    f"Stored INVALID measurement {new_measurement.id} for session {payload.session_id}: {error_message}"
-                )
-            else:
-                logger.info(f"Stored VALID measurement {new_measurement.id} for session {payload.session_id}")
+
+            logger.info(f"Stored measurement {new_measurement.id} for session {payload.session_id} and queued async task")
             
             return schemas.SuccessResponse(
                 success=True,
-                message="Measurement received and stored" + (" (marked as invalid)" if not is_valid else ""),
+                message="Measurement received, stored, and queued for async processing",
                 data={
                     "measurement_id": new_measurement.id,
-                    "is_valid": is_valid,
-                    "validation_error": error_message if not is_valid else None
+                    "queued": True
                 }
             )
             
         except IntegrityError as ie:
-            # Data violates database CHECK constraints - cannot store in raw_measurements
             db.rollback()
-            
-            # Extract constraint violation details
-            constraint_error = str(ie.orig)
-            logger.error(f"DB constraint violation for session {payload.session_id}: {constraint_error}")
-            
-            # Log to invalid_measurements without raw_measurement_id (will fail FK constraint)
-            # Instead, return error with details
-            error_detail = f"Database constraint violation: {constraint_error}"
-            if error_message:
-                error_detail += f"; Additional validation errors: {error_message}"
-            
-            logger.warning(
-                f"REJECTED measurement for session {payload.session_id} - DB constraint violation: {error_detail}"
-            )
-            
-            return schemas.SuccessResponse(
-                success=True,
-                message="Measurement received but rejected due to extreme invalid values",
-                data={
-                    "measurement_id": None,
-                    "is_valid": False,
-                    "validation_error": error_detail,
-                    "rejected": True
-                }
+            logger.error(f"DB constraint violation for session {payload.session_id}: {str(ie)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Database constraint violation: {str(ie)}"
             )
         
     except HTTPException:
@@ -377,8 +342,8 @@ def get_recent_measurements(limit: int = 100, db: Session = Depends(get_db)):
         )
 
 
-@measurements_router.post("/batch", response_model=schemas.BatchMeasurementResponse, status_code=status.HTTP_201_CREATED)
-def ingest_batch_measurements(payload: schemas.BatchMeasurementCreateLax, db: Session = Depends(get_db)):
+@app.post("/raw-data/batch", response_model=schemas.BatchMeasurementResponse, status_code=status.HTTP_201_CREATED, tags=["measurements"])
+def ingest_batch_measurements(payload: schemas.BatchMeasurementCreate, db: Session = Depends(get_db)):
     """
     Ingest batch of measurements from mobile app (OFFLINE-FIRST ARCHITECTURE).
     
@@ -387,15 +352,15 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreateLax, db: Se
     
     This endpoint:
     1. Validates session existence
-    2. Performs bulk validation of all measurements
-    3. Uses efficient bulk insert (db.add_all()) for valid measurements
-    4. Marks invalid measurements with is_valid=false
-    5. Logs rejection reasons to invalid_measurements table
+    2. Stores incoming measurements using bulk insert (db.add_all())
+    3. Calls db.flush() to retrieve generated BIGSERIAL IDs
+    4. Enqueues Celery task process_batch_task with inserted IDs
+    5. Commits transaction and returns summary
     
     Performance: Can handle up to 10,000 measurements per request.
     
     Args:
-        payload: BatchMeasurementCreateLax containing session_id and list of measurements
+        payload: BatchMeasurementCreate containing session_id and list of measurements
         db: Database session dependency
         
     Returns:
@@ -412,36 +377,17 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreateLax, db: Se
         
         total_received = len(payload.measurements)
         total_stored = 0
-        total_invalid = 0
-        total_rejected = 0
-        invalid_indices = []
-        rejected_indices = []
         
         # Prepare list for bulk insert
         measurements_to_insert = []
-        invalid_records_to_insert = []
-        measurement_index_map = {}  # Maps original index to measurement object
+        inserted_ids = []
         
         logger.info(f"Processing batch of {total_received} measurements for session {payload.session_id}")
         
         # Process each measurement
-        for idx, measurement in enumerate(payload.measurements):
-            # Convert to RawMeasurementCreateLax for validation
-            measurement_data = schemas.RawMeasurementCreateLax(
-                session_id=payload.session_id,
-                measured_at=measurement.measured_at,
-                latitude=measurement.latitude,
-                longitude=measurement.longitude,
-                distance_left=measurement.distance_left,
-                distance_right=measurement.distance_right
-            )
-            
-            # Validate measurement (logical validation only - does not prevent storage)
-            is_valid, error_message = schemas.validate_measurement_data(measurement_data)
-            
-            # Create measurement object for bulk insert
-            # NOTE: DB has no CHECK constraints, so ALL values can be stored
-            # is_valid flag indicates logical validity (used in data cleaning pipeline)
+        for measurement in payload.measurements:
+            # Structural validation is handled by Pydantic schema.
+            # Business/logical validation is delegated to Celery pipeline.
             new_measurement = models.RawMeasurement(
                 session_id=payload.session_id,
                 measured_at=measurement.measured_at,
@@ -449,48 +395,27 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreateLax, db: Se
                 longitude=measurement.longitude,
                 distance_left=measurement.distance_left,
                 distance_right=measurement.distance_right,
-                is_valid=is_valid
+                is_valid=True
             )
             
             measurements_to_insert.append(new_measurement)
-            measurement_index_map[idx] = new_measurement
-            
-            if not is_valid:
-                total_invalid += 1
-                invalid_indices.append(idx)
-                # Store error message for later (will need measurement_id after insert)
-                invalid_records_to_insert.append({
-                    'index': idx,
-                    'error': error_message
-                })
         
         # Perform BULK INSERT (efficient!)
         if measurements_to_insert:
             try:
                 db.add_all(measurements_to_insert)
                 db.flush()  # Flush to get IDs without committing
+
+                inserted_ids = [measurement.id for measurement in measurements_to_insert if measurement.id is not None]
                 
                 total_stored = len(measurements_to_insert)
-                
-                # Now create invalid_measurement records if needed
-                if invalid_records_to_insert:
-                    invalid_records = []
-                    for record_info in invalid_records_to_insert:
-                        idx = record_info['index']
-                        measurement_obj = measurement_index_map[idx]
-                        
-                        invalid_record = models.InvalidMeasurement(
-                            raw_measurement_id=measurement_obj.id,
-                            rejection_reason=record_info['error']
-                        )
-                        invalid_records.append(invalid_record)
-                    
-                    db.add_all(invalid_records)
+
+                process_batch_task.delay(inserted_ids)
                 
                 db.commit()
                 
                 logger.info(
-                    f"Batch processed: {total_stored} stored ({total_invalid} invalid, {total_rejected} rejected) "
+                    f"Batch processed: {total_stored} stored and queued for async processing "
                     f"for session {payload.session_id}"
                 )
                 
@@ -507,10 +432,10 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreateLax, db: Se
             message=f"Batch processed: {total_stored}/{total_received} measurements stored",
             total_received=total_received,
             total_stored=total_stored,
-            total_invalid=total_invalid,
-            total_rejected=total_rejected,
-            invalid_indices=invalid_indices,
-            rejected_indices=rejected_indices
+            total_invalid=0,
+            total_rejected=0,
+            invalid_indices=[],
+            rejected_indices=[]
         )
         
     except HTTPException:
