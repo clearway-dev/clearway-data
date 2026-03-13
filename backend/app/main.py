@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from . import models, schemas
-from .tasks import process_batch_task
+from .worker import process_batch_task
 from .database import get_db, engine, Base
 
 # Configure logging
