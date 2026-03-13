@@ -14,6 +14,7 @@ psycopg2-binary==2.9.9  # Ovladač pro připojení k PostgreSQL
 geoalchemy2==0.14.2     # Rozšíření SQLAlchemy pro práci s PostGIS (třeba typ Geometry)
 Shapely==2.0.6          # Knihovna pro manipulaci s geometrií v Pythonu (často ji GeoAlchemy2 potřebuje)
 numpy<2.0.0
+osmnx==1.9.3            # Stahování a zpracování OSM silniční sítě (seed_roads, osm_service)
 
 # --- Asynchronní zpracování (Worker a Fronta) ---
 celery==5.3.6           # Nástroj pro běh asynchronních úloh na pozadí
