@@ -60,6 +60,17 @@ def _validate_measurement_logic(measurement: models.RawMeasurement) -> list[str]
     if not (-180.0 <= measurement.longitude <= 180.0):
         errors.append(f"longitude out of range [-180, 180] (got {measurement.longitude})")
 
+    if measurement.speed is not None and measurement.speed < 0:
+        errors.append(f"speed must be >= 0 (got {measurement.speed})")
+
+    if measurement.accuracy_gps is not None and measurement.accuracy_gps < 0:
+        errors.append(f"accuracy_gps must be >= 0 (got {measurement.accuracy_gps})")
+
+    if measurement.accuracy_gps is not None and measurement.accuracy_gps > 25:
+        errors.append(
+            f"accuracy_gps must be <= 25 m (got {measurement.accuracy_gps})"
+        )
+
     return errors
 
 
@@ -98,6 +109,20 @@ def _map_match(
             )
             LIMIT 1
             """
+            # WITH p AS (
+            #     SELECT ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) AS pt
+            # )
+            # SELECT
+            #     ST_Y(q.cp) AS snapped_lat,
+            #     ST_X(q.cp) AS snapped_lon
+            # FROM p
+            # CROSS JOIN LATERAL (
+            #     SELECT ST_ClosestPoint(rs.geom, p.pt) AS cp
+            #     FROM road_segments rs
+            #     WHERE ST_DWithin(rs.geom::geography, p.pt::geography, :max_dist)
+            #     ORDER BY ST_Distance(rs.geom::geography, p.pt::geography)
+            #     LIMIT 1
+            # ) q;
         ),
         {"lat": lat, "lon": lon, "max_dist": max_distance_m},
     ).fetchone()

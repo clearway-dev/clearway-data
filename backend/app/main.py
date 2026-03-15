@@ -281,6 +281,8 @@ def ingest_raw_measurement(payload: schemas.RawMeasurementCreateLax, db: Session
                 longitude=payload.longitude,
                 distance_left=payload.distance_left,
                 distance_right=payload.distance_right,
+                speed=payload.speed,
+                accuracy_gps=payload.accuracy_gps,
                 is_valid=True
             )
             
@@ -395,6 +397,8 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreate, db: Sessi
                 longitude=measurement.longitude,
                 distance_left=measurement.distance_left,
                 distance_right=measurement.distance_right,
+                speed=measurement.speed,
+                accuracy_gps=measurement.accuracy_gps,
                 is_valid=True
             )
             

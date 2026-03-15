@@ -64,6 +64,8 @@ class RawMeasurement(Base):
     longitude: Mapped[float] = mapped_column(Double, nullable=False)
     distance_left: Mapped[float] = mapped_column(Float, nullable=False)
     distance_right: Mapped[float] = mapped_column(Float, nullable=False)
+    speed: Mapped[float] = mapped_column(Float, nullable=False)
+    accuracy_gps: Mapped[float] = mapped_column(Float, nullable=False)
     is_valid: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp())
 
