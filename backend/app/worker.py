@@ -11,6 +11,7 @@ Phase 2 – Map-matching + cleaning:
     Result → row in cleaned_measurements with matched geometry.
 """
 import logging
+import math
 import os
 
 from celery import Celery
@@ -29,6 +30,8 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://clearway-red
 
 # Maximum distance in metres for snapping a GPS point to a road segment.
 MAP_MATCH_MAX_DISTANCE_M = 50.0
+MAX_GPS_ACCURACY = 25.0  # Maximum GPS accuracy to consider a point valid for map-matching
+MAX_REALISTIC_SPEED_MPS = 40.0
 
 celery_app = Celery(
     "clearway",
@@ -66,9 +69,9 @@ def _validate_measurement_logic(measurement: models.RawMeasurement) -> list[str]
     if measurement.accuracy_gps is not None and measurement.accuracy_gps < 0:
         errors.append(f"accuracy_gps must be >= 0 (got {measurement.accuracy_gps})")
 
-    if measurement.accuracy_gps is not None and measurement.accuracy_gps > 25:
+    if measurement.accuracy_gps is not None and measurement.accuracy_gps > MAX_GPS_ACCURACY:
         errors.append(
-            f"accuracy_gps must be <= 25 m (got {measurement.accuracy_gps})"
+            f"accuracy_gps must be <= {MAX_GPS_ACCURACY} m (got {measurement.accuracy_gps})"
         )
 
     return errors
@@ -133,6 +136,22 @@ def _map_match(
     return float(row.snapped_lat), float(row.snapped_lon)
 
 
+def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return great-circle distance between 2 GPS points in meters."""
+    earth_radius_m = 6371000.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return earth_radius_m * c
+
+
 # --------------------------------------------------------------------------- #
 # Celery task
 # --------------------------------------------------------------------------- #
@@ -166,6 +185,7 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
             .join(models.RawMeasurement.session)
             .join(models.Session.vehicle)
             .filter(models.RawMeasurement.id.in_(measurement_ids))
+            .order_by(models.RawMeasurement.measured_at.asc(), models.RawMeasurement.id.asc())
             .all()
         )
 
@@ -183,6 +203,7 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
         valid_measurements: list[models.RawMeasurement] = []
         invalid_records: list[models.InvalidMeasurement] = []
         invalid_count = 0
+        last_valid_point: models.RawMeasurement | None = None
 
         for m in measurements:
             errors = _validate_measurement_logic(m)
@@ -197,8 +218,39 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
                         )
                     )
                     existing_invalid_ids.add(m.id)
-            else:
-                valid_measurements.append(m)
+                continue
+
+            # Urban canyon / GPS jump detection against last valid point only.
+            if last_valid_point is not None:
+                time_diff_s = (m.measured_at - last_valid_point.measured_at).total_seconds()
+                distance_m = _haversine_distance_m(
+                    last_valid_point.latitude,
+                    last_valid_point.longitude,
+                    m.latitude,
+                    m.longitude,
+                )
+
+                is_unrealistic_jump = (
+                    (time_diff_s == 0 and distance_m > 0)
+                    or (time_diff_s > 0 and (distance_m / time_diff_s) > MAX_REALISTIC_SPEED_MPS)
+                )
+
+                if is_unrealistic_jump:
+                    invalid_count += 1
+                    m.is_valid = False
+                    if m.id not in existing_invalid_ids:
+                        invalid_records.append(
+                            models.InvalidMeasurement(
+                                raw_measurement_id=m.id,
+                                rejection_reason="GPS jump detected: Unrealistic speed",
+                            )
+                        )
+                        existing_invalid_ids.add(m.id)
+                    # Important: do not move last_valid_point on invalid jump.
+                    continue
+
+            valid_measurements.append(m)
+            last_valid_point = m
 
         # ------------------------------------------------------------------ #
         # PHASE 2 - Map-matching + cleaned_measurements
