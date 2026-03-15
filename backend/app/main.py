@@ -2,10 +2,11 @@
 ClearWay FastAPI Backend
 Main application entry point with API endpoints for data ingestion.
 """
-import logging
+import os
 from typing import List
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -13,9 +14,15 @@ from . import models, schemas
 from .worker import process_batch_task
 from .database import get_db, engine, Base
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configure Loguru for FastAPI process
+os.makedirs("/app/logs", exist_ok=True)
+logger.remove()
+logger.add(
+    "/app/logs/fastapi.log",
+    rotation="10 MB",
+    retention="7 days",
+    level="INFO",
+)
 
 # Create all database tables
 # Note: In production, use Alembic migrations instead

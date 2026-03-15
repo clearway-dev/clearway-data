@@ -10,20 +10,19 @@ Phase 2 – Map-matching + cleaning:
     cleaned_width = distance_left + distance_right + vehicle.width
     Result → row in cleaned_measurements with matched geometry.
 """
-import logging
 import math
 import os
 
 from celery import Celery
+from celery.signals import worker_process_init
 from geoalchemy2.shape import from_shape
+from loguru import logger
 from shapely.geometry import Point
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from . import models
 from .database import SessionLocal
-
-logger = logging.getLogger(__name__)
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://clearway-redis:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://clearway-redis:6379/0")
@@ -38,6 +37,18 @@ celery_app = Celery(
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
 )
+
+
+@worker_process_init.connect
+def setup_worker_logger(**kwargs):
+    os.makedirs("/app/logs", exist_ok=True)
+    logger.remove()
+    logger.add(
+        "/app/logs/worker.log",
+        rotation="10 MB",
+        retention="7 days",
+        level="INFO",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -189,6 +200,12 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
             .all()
         )
 
+        logger.info(
+            "process_batch_task started - requested_ids={} loaded_measurements={}",
+            len(measurement_ids),
+            len(measurements),
+        )
+
         # Pre-load existing invalid IDs to avoid duplicate entries on retry.
         existing_invalid_ids: set[int] = {
             row.raw_measurement_id
@@ -210,14 +227,20 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
             if errors:
                 invalid_count += 1
                 m.is_valid = False
+                reason = "; ".join(errors)
                 if m.id not in existing_invalid_ids:
                     invalid_records.append(
                         models.InvalidMeasurement(
                             raw_measurement_id=m.id,
-                            rejection_reason="; ".join(errors),
+                            rejection_reason=reason,
                         )
                     )
                     existing_invalid_ids.add(m.id)
+                logger.info(
+                    "measurement_evaluation id={} status=invalid stage=logical_validation reason='{}'",
+                    m.id,
+                    reason,
+                )
                 continue
 
             # Urban canyon / GPS jump detection against last valid point only.
@@ -238,19 +261,34 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
                 if is_unrealistic_jump:
                     invalid_count += 1
                     m.is_valid = False
+                    reason = "GPS jump detected: Unrealistic speed"
                     if m.id not in existing_invalid_ids:
                         invalid_records.append(
                             models.InvalidMeasurement(
                                 raw_measurement_id=m.id,
-                                rejection_reason="GPS jump detected: Unrealistic speed",
+                                rejection_reason=reason,
                             )
                         )
                         existing_invalid_ids.add(m.id)
+                    speed_estimate = None if time_diff_s <= 0 else (distance_m / time_diff_s)
+                    logger.info(
+                        "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
+                        "distance_m={:.2f} time_diff_s={:.2f} speed_mps={}",
+                        m.id,
+                        reason,
+                        distance_m,
+                        time_diff_s,
+                        f"{speed_estimate:.2f}" if speed_estimate is not None else "inf",
+                    )
                     # Important: do not move last_valid_point on invalid jump.
                     continue
 
             valid_measurements.append(m)
             last_valid_point = m
+            logger.info(
+                "measurement_evaluation id={} status=valid stage=logical_validation",
+                m.id,
+            )
 
         # ------------------------------------------------------------------ #
         # PHASE 2 - Map-matching + cleaned_measurements
@@ -280,9 +318,11 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
                     )
                     existing_invalid_ids.add(m.id)
 
-                logger.debug(
-                    "No road match for measurement id=%d (%.6f, %.6f)",
+                logger.info(
+                    "measurement_evaluation id={} status=invalid stage=map_matching "
+                    "reason='no road segment within {:.0f} m' lat={:.6f} lon={:.6f}",
                     m.id,
+                    MAP_MATCH_MAX_DISTANCE_M,
                     m.latitude,
                     m.longitude,
                 )
@@ -301,6 +341,15 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
                 )
             )
 
+            logger.info(
+                "measurement_evaluation id={} status=cleaned stage=map_matching "
+                "snapped_lat={:.6f} snapped_lon={:.6f} cleaned_width={:.3f}",
+                m.id,
+                snapped_lat,
+                snapped_lon,
+                cleaned_width,
+            )
+
         if cleaned_records:
             db.bulk_save_objects(cleaned_records)
 
@@ -312,7 +361,7 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
         db.commit()
 
         logger.info(
-            "process_batch_task done - processed=%d invalid=%d cleaned=%d unmatched=%d",
+            "process_batch_task done - processed={} invalid={} cleaned={} unmatched={}",
             len(measurements),
             invalid_count,
             len(cleaned_records),
@@ -328,6 +377,7 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
         }
     except Exception:
         db.rollback()
+        logger.exception("Unhandled error in process_batch_task")
         raise
     finally:
         db.close()

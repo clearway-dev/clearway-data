@@ -19,3 +19,6 @@ osmnx==1.9.3            # Stahování a zpracování OSM silniční sítě (seed
 # --- Asynchronní zpracování (Worker a Fronta) ---
 celery==5.3.6           # Nástroj pro běh asynchronních úloh na pozadí
 redis==5.0.1            # Klient pro Redis (slouží jako message broker pro Celery)
+
+# --- Logování ---
+loguru==0.7.2

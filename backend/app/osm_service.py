@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 import osmnx as ox
+from loguru import logger
 from app.models import RoadSegment
 from geoalchemy2.shape import from_shape
 
@@ -8,13 +9,13 @@ class OSMService:
         self.db = db
 
     def import_segments_for_place(self, place_name: str = "Plzeň, Czechia"):
-        print(f"Importing road segments for place: {place_name}")
+        logger.info(f"Importing road segments for place: {place_name}")
 
         G = ox.graph_from_place(place_name, network_type='drive')
 
         gdf_nodes, gdf_edges = ox.graph_to_gdfs(G)
 
-        print(f"Number of edges fetched: {len(gdf_edges)}")
+        logger.info(f"Number of edges fetched: {len(gdf_edges)}")
 
         gdf_edges = gdf_edges.reset_index()
 
@@ -42,7 +43,7 @@ class OSMService:
         
             if count % 1000 == 0:
                 self.db.commit()
-                print(f"Committed {count} segments so far.")
+                logger.info(f"Committed {count} segments so far.")
     
         self.db.commit()
-        print(f"Finished importing. Total segments imported: {count}")
+        logger.info(f"Finished importing. Total segments imported: {count}")

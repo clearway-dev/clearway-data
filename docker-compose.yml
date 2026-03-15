@@ -10,6 +10,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./logs:/app/logs
     environment:
       # We construct the connection string dynamically from .env variables
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
@@ -46,6 +47,7 @@ services:
     container_name: clearway-celery-worker
     volumes:
       - ./backend:/app
+      - ./logs:/app/logs
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
       CELERY_BROKER_URL: redis://clearway-redis:6379/0
