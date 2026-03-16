@@ -17,6 +17,7 @@ from celery import Celery
 from celery.signals import worker_process_init
 from geoalchemy2.shape import from_shape
 from loguru import logger
+from scipy.signal import medfilt
 from shapely.geometry import Point
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -31,6 +32,8 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://clearway-red
 MAP_MATCH_MAX_DISTANCE_M = 50.0
 MAX_GPS_ACCURACY = 25.0  # Maximum GPS accuracy to consider a point valid for map-matching
 MAX_REALISTIC_SPEED_MPS = 40.0
+# Median window for width denoising. Must be an odd number.
+WIDTH_MEDIAN_WINDOW = 3
 
 celery_app = Celery(
     "clearway",
@@ -161,6 +164,23 @@ def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) ->
     )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return earth_radius_m * c
+
+
+def _apply_width_median_filter(widths: list[float], window: int = WIDTH_MEDIAN_WINDOW) -> list[float]:
+    """Apply 1D median filter on width series only (no GPS smoothing)."""
+    if not widths:
+        return []
+
+    kernel_size = max(1, window)
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+
+    # medfilt requires odd kernel and behaves best when kernel <= series length.
+    if kernel_size > len(widths):
+        kernel_size = len(widths) if len(widths) % 2 == 1 else max(1, len(widths) - 1)
+
+    filtered = medfilt(widths, kernel_size=kernel_size)
+    return [float(value) for value in filtered]
 
 
 # --------------------------------------------------------------------------- #
@@ -296,6 +316,8 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
         cleaned_records: list[models.CleanedMeasurement] = []
         unmatched_count = 0
 
+        matched_points: list[dict] = []
+
         for m in valid_measurements:
             vehicle_width: float = m.session.vehicle.width
 
@@ -329,12 +351,32 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
                 continue
 
             snapped_lat, snapped_lon = snapped
-            cleaned_width = m.distance_left + m.distance_right + vehicle_width
+            raw_width = m.distance_left + m.distance_right + vehicle_width
+
+            matched_points.append(
+                {
+                    "measurement": m,
+                    "snapped_lat": snapped_lat,
+                    "snapped_lon": snapped_lon,
+                    "raw_width": raw_width,
+                }
+            )
+
+        # Final cleaning step: median filter AFTER map-matching.
+        # Batch is already chronologically ordered and belongs to one vehicle.
+        matched_points.sort(key=lambda item: (item["measurement"].measured_at, item["measurement"].id))
+        matched_raw_widths = [item["raw_width"] for item in matched_points]
+        filtered_widths = _apply_width_median_filter(matched_raw_widths)
+
+        for item, filtered_width in zip(matched_points, filtered_widths):
+            m = item["measurement"]
+            snapped_lat = item["snapped_lat"]
+            snapped_lon = item["snapped_lon"]
 
             cleaned_records.append(
                 models.CleanedMeasurement(
                     raw_measurement_id=m.id,
-                    cleaned_width=cleaned_width,
+                    cleaned_width=filtered_width,
                     quality_score=None,  # reserved for future scoring logic
                     cluster_id=None,
                     geom=from_shape(Point(snapped_lon, snapped_lat), srid=4326),
@@ -342,12 +384,13 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
             )
 
             logger.info(
-                "measurement_evaluation id={} status=cleaned stage=map_matching "
-                "snapped_lat={:.6f} snapped_lon={:.6f} cleaned_width={:.3f}",
+                "measurement_evaluation id={} status=cleaned stage=post_map_matching_median "
+                "snapped_lat={:.6f} snapped_lon={:.6f} cleaned_width={:.3f} raw_width={:.3f}",
                 m.id,
                 snapped_lat,
                 snapped_lon,
-                cleaned_width,
+                filtered_width,
+                item["raw_width"],
             )
 
         if cleaned_records:

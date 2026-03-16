@@ -3,3 +3,6 @@
 db_schema.sql
 
 test_validation.ps1
+test_batch.ps1
+
+logs/
