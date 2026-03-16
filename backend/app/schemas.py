@@ -1,0 +1,254 @@
+"""
+Pydantic schemas for request/response validation.
+Provides structural validation for incoming data from mobile app and responses to frontend.
+"""
+from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import Optional
+from uuid import UUID
+
+
+# ==============================================
+# VEHICLE SCHEMAS
+# ==============================================
+
+class VehicleBase(BaseModel):
+    """Base schema for vehicle data"""
+    vehicle_name: str = Field(..., min_length=1, max_length=100, description="Vehicle name/identifier")
+    width: float = Field(..., gt=0, description="Vehicle width in centimeters")
+
+
+class VehicleCreate(VehicleBase):
+    """Schema for creating a new vehicle"""
+    pass
+
+
+class VehicleResponse(VehicleBase):
+    """Schema for vehicle response"""
+    id: UUID
+    
+    class Config:
+        from_attributes = True  # Allows serialization from SQLAlchemy models
+
+
+# ==============================================
+# SENSOR SCHEMAS
+# ==============================================
+
+class SensorBase(BaseModel):
+    """Base schema for sensor data"""
+    description: Optional[str] = Field(None, description="Sensor description")
+    is_active: bool = Field(True, description="Whether the sensor is active")
+
+
+class SensorCreate(SensorBase):
+    """Schema for creating a new sensor"""
+    pass
+
+
+class SensorResponse(SensorBase):
+    """Schema for sensor response"""
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ==============================================
+# SESSION SCHEMAS
+# ==============================================
+
+class SessionCreate(BaseModel):
+    """Schema for creating a new measurement session"""
+    sensor_id: UUID = Field(..., description="ID of the sensor used")
+    vehicle_id: UUID = Field(..., description="ID of the vehicle used")
+
+
+class SessionResponse(BaseModel):
+    """Schema for session response"""
+    id: UUID
+    sensor_id: UUID
+    vehicle_id: UUID
+    
+    class Config:
+        from_attributes = True
+
+
+# ==============================================
+# RAW MEASUREMENT SCHEMAS
+# ==============================================
+
+class RawMeasurementCreateLax(BaseModel):
+    """
+    Lax schema for receiving raw measurement data from mobile app.
+    No strict validation - allows storing invalid data with is_valid=false.
+    """
+    session_id: UUID = Field(..., description="ID of the measurement session")
+    measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
+    latitude: float = Field(..., description="Latitude in decimal degrees")
+    longitude: float = Field(..., description="Longitude in decimal degrees")
+    distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
+    speed: float = Field(..., description="Vehicle speed in m/s")
+    accuracy_gps: float = Field(..., description="GPS horizontal accuracy in meters")
+
+
+class RawMeasurementCreate(BaseModel):
+    """
+    Schema for receiving raw measurement data from mobile app.
+    Structural validation only (types + required fields).
+    """
+    session_id: UUID = Field(..., description="ID of the measurement session")
+    measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
+    latitude: float = Field(..., description="Latitude in decimal degrees")
+    longitude: float = Field(..., description="Longitude in decimal degrees")
+    distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
+    speed: float = Field(..., description="Vehicle speed in m/s")
+    accuracy_gps: float = Field(..., description="GPS horizontal accuracy in meters")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "session_id": "550e8400-e29b-41d4-a716-446655440000",
+                "measured_at": "2026-02-24T10:30:00.000Z",
+                "latitude": 49.8175,
+                "longitude": 15.4730,
+                "distance_left": 250,
+                "distance_right": 380
+            }
+        }
+
+class RawMeasurementResponse(BaseModel):
+    """Schema for raw measurement response"""
+    id: int
+    session_id: UUID
+    measured_at: datetime
+    latitude: float
+    longitude: float
+    distance_left: float
+    distance_right: float
+    speed: float
+    accuracy_gps: float
+    is_valid: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ==============================================
+# BATCH MEASUREMENT SCHEMAS
+# ==============================================
+
+class MeasurementItem(BaseModel):
+    """
+    Single measurement item for batch upload (without session_id).
+    Used in offline-first architecture where mobile app collects data and sends in batches.
+    """
+    measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
+    latitude: float = Field(..., description="Latitude in decimal degrees")
+    longitude: float = Field(..., description="Longitude in decimal degrees")
+    distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
+    speed: float = Field(..., description="Vehicle speed in m/s")
+    accuracy_gps: float = Field(..., description="GPS horizontal accuracy in meters")
+
+
+class MeasurementItemLax(BaseModel):
+    """
+    Single measurement item without strict validation for batch upload.
+    Allows storing invalid data with is_valid=false flag.
+    """
+    measured_at: datetime = Field(..., description="Exact timestamp when measurement was taken")
+    latitude: float = Field(..., description="Latitude in decimal degrees")
+    longitude: float = Field(..., description="Longitude in decimal degrees")
+    distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
+    distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
+    speed: float = Field(..., description="Vehicle speed in m/s")
+    accuracy_gps: float = Field(..., description="GPS horizontal accuracy in meters")
+
+
+class BatchMeasurementCreate(BaseModel):
+    """
+    Schema for receiving multiple measurements at once from mobile app.
+    This is the PRIMARY endpoint for offline-first mobile architecture.
+    
+    Mobile app collects measurements offline and sends them in one batch.
+    """
+    session_id: UUID = Field(..., description="ID of the measurement session")
+    measurements: list[MeasurementItem] = Field(
+        ..., 
+        min_length=1, 
+        max_length=10000, 
+        description="List of measurements (max 10,000 per batch)"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "session_id": "550e8400-e29b-41d4-a716-446655440000",
+                "measurements": [
+                    {
+                        "measured_at": "2026-02-24T10:30:00.000Z",
+                        "latitude": 49.8175,
+                        "longitude": 15.4730,
+                        "distance_left": 250,
+                        "distance_right": 380
+                    },
+                    {
+                        "measured_at": "2026-02-24T10:30:01.000Z",
+                        "latitude": 49.8176,
+                        "longitude": 15.4731,
+                        "distance_left": 255,
+                        "distance_right": 385
+                    }
+                ]
+            }
+        }
+
+
+class BatchMeasurementCreateLax(BaseModel):
+    """
+    Schema for receiving multiple measurements with lax validation.
+    Accepts all data and marks invalid entries with is_valid=false.
+    """
+    session_id: UUID = Field(..., description="ID of the measurement session")
+    measurements: list[MeasurementItemLax] = Field(
+        ..., 
+        min_length=1, 
+        max_length=10000, 
+        description="List of measurements (max 10,000 per batch)"
+    )
+
+
+class BatchMeasurementResponse(BaseModel):
+    """Response for batch measurement upload"""
+    success: bool = Field(..., description="Overall success status")
+    message: str = Field(..., description="Summary message")
+    total_received: int = Field(..., description="Total measurements received")
+    total_stored: int = Field(..., description="Total measurements successfully stored")
+    total_invalid: int = Field(..., description="Total measurements marked as invalid")
+    total_rejected: int = Field(..., description="Total measurements rejected (DB constraint violations)")
+    invalid_indices: list[int] = Field(default_factory=list, description="Indices of invalid measurements")
+    rejected_indices: list[int] = Field(default_factory=list, description="Indices of rejected measurements")
+
+
+# ==============================================
+# GENERIC RESPONSE SCHEMAS
+# ==============================================
+
+class SuccessResponse(BaseModel):
+    """Generic success response"""
+    success: bool = Field(True, description="Operation success status")
+    message: str = Field(..., description="Human-readable message")
+    data: Optional[dict] = Field(None, description="Optional response data")
+
+
+class ErrorResponse(BaseModel):
+    """Generic error response"""
+    success: bool = Field(False, description="Operation success status")
+    error: str = Field(..., description="Error message")
+    detail: Optional[str] = Field(None, description="Detailed error information")
