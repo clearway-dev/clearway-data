@@ -1,6 +1,7 @@
 import { MeasurementBatch, Vehicle, Sensor, Session } from '../types';
 
-const API_BASE_URL = 'http://192.168.20.67:8000/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
+const API_PREFIX = '/api';
 
 export class ApiService {
   /**
@@ -8,11 +9,11 @@ export class ApiService {
    */
   static async getVehicles(): Promise<Vehicle[]> {
     try {
-      console.log('🔄 Fetching vehicles from:', `${API_BASE_URL}/vehicles`);
+      console.log('🔄 Fetching vehicles from:', `${API_BASE_URL}${API_PREFIX}/vehicles`);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
     
-      const response = await fetch(`${API_BASE_URL}/vehicles`, {
+      const response = await fetch(`${API_BASE_URL}${API_PREFIX}/vehicles`, {
         signal: controller.signal,
       });
     
@@ -38,11 +39,11 @@ export class ApiService {
    */
   static async getSensors(): Promise<Sensor[]> {
     try {
-      console.log('🔄 Fetching sensors from:', `${API_BASE_URL}/sensors`);
+      console.log('🔄 Fetching sensors from:', `${API_BASE_URL}${API_PREFIX}/sensors`);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
       
-      const response = await fetch(`${API_BASE_URL}/sensors`, {
+      const response = await fetch(`${API_BASE_URL}${API_PREFIX}/sensors`, {
         signal: controller.signal,
       });
       
@@ -71,7 +72,7 @@ export class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
       
-      const response = await fetch(`${API_BASE_URL}/sessions`, {
+      const response = await fetch(`${API_BASE_URL}${API_PREFIX}/sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -105,7 +106,7 @@ export class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for batch
       
-      const response = await fetch(`${API_BASE_URL}/measurements/batch`, {
+      const response = await fetch(`${API_BASE_URL}/raw-data/batch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

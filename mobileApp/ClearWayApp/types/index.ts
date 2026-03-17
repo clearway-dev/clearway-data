@@ -26,6 +26,8 @@ export interface LocalMeasurement {
   longitude: number;
   distance_left: number;
   distance_right: number;
+  speed: number;
+  accuracy_gps: number;
   synced: number; // 0 or 1 (SQLite boolean)
 }
 
@@ -35,6 +37,8 @@ export interface MeasurementItem {
   longitude: number;
   distance_left: number;
   distance_right: number;
+  speed: number;
+  accuracy_gps: number;
 }
 
 export interface MeasurementBatch {

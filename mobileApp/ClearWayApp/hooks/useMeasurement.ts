@@ -13,6 +13,16 @@ const simulateDistances = () => {
   };
 };
 
+const simulateSpeed = () => {
+  // 5-15 m/s (~18-54 km/h) for realistic city driving simulation
+  return Math.random() * 10 + 5;
+};
+
+const simulateGpsAccuracy = () => {
+  // Typical mobile GPS horizontal accuracy in meters
+  return Math.random() * 12 + 3;
+};
+
 export const useMeasurement = (sessionId: string | null) => {
   const [isRecording, setIsRecording] = useState(false);
   const [measurementCount, setMeasurementCount] = useState(0);
@@ -55,6 +65,8 @@ export const useMeasurement = (sessionId: string | null) => {
       const saveMeasurement = async () => {
         try {
           const { distance_left, distance_right } = simulateDistances();
+          const speed = location.speed != null && location.speed >= 0 ? location.speed : simulateSpeed();
+          const accuracy_gps = location.accuracy ?? simulateGpsAccuracy();
 
           await DatabaseService.insertMeasurement({
             session_id: sessionId,
@@ -63,6 +75,8 @@ export const useMeasurement = (sessionId: string | null) => {
             longitude: location.longitude,
             distance_left,
             distance_right,
+            speed,
+            accuracy_gps,
           });
 
           setMeasurementCount(prev => prev + 1);

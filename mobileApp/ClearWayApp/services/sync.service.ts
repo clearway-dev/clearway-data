@@ -80,6 +80,8 @@ export class SyncService {
             longitude: m.longitude,
             distance_left: m.distance_left,
             distance_right: m.distance_right,
+            speed: m.speed,
+            accuracy_gps: m.accuracy_gps,
           })),
         };
 

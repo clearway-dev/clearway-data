@@ -15,12 +15,23 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Spustit server:
+3. Nastavit proměnné prostředí v `.env` (v rootu projektu), například:
+
+```env
+API_URL=http://localhost:8000
+BACKEND_HOST=0.0.0.0
+BACKEND_PORT=8000
+CORS_ALLOW_ORIGINS=*
+```
+
+`API_URL` backend používá jako výchozí hodnotu pro CORS (pokud není nastaveno `CORS_ALLOW_ORIGINS`) a vrací ji v `/` a `/health` pro kontrolu konfigurace.
+
+4. Spustit server:
 ```bash
 python main.py
 ```
 
-Server bude dostupný na `http://localhost:8000`
+Server bude dostupný na `http://localhost:${BACKEND_PORT}`
 
 ## API dokumentace
 

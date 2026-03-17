@@ -20,7 +20,7 @@ logger.remove()
 logger.add(
     "/app/logs/fastapi.log",
     rotation="10 MB",
-    retention="7 days",
+    retention="14 days",
     level="INFO",
 )
 

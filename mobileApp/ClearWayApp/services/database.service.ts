@@ -20,12 +20,26 @@ export class DatabaseService {
           longitude REAL NOT NULL,
           distance_left REAL NOT NULL,
           distance_right REAL NOT NULL,
+          speed REAL NOT NULL DEFAULT 0,
+          accuracy_gps REAL NOT NULL DEFAULT 0,
           synced INTEGER DEFAULT 0
         );
         
         CREATE INDEX IF NOT EXISTS idx_synced ON local_measurements(synced);
         CREATE INDEX IF NOT EXISTS idx_session ON local_measurements(session_id);
       `);
+
+      // Lightweight migration for existing DBs created before speed/accuracy fields.
+      const columns = await this.db.getAllAsync<{ name: string }>('PRAGMA table_info(local_measurements)');
+      const columnNames = new Set(columns.map((c) => c.name));
+
+      if (!columnNames.has('speed')) {
+        await this.db.execAsync('ALTER TABLE local_measurements ADD COLUMN speed REAL NOT NULL DEFAULT 0;');
+      }
+
+      if (!columnNames.has('accuracy_gps')) {
+        await this.db.execAsync('ALTER TABLE local_measurements ADD COLUMN accuracy_gps REAL NOT NULL DEFAULT 0;');
+      }
       
       console.log('✓ Database initialized');
     } catch (error) {
@@ -45,8 +59,8 @@ export class DatabaseService {
     try {
       await this.db.runAsync(
         `INSERT INTO local_measurements 
-         (session_id, measured_at, latitude, longitude, distance_left, distance_right, synced) 
-         VALUES (?, ?, ?, ?, ?, ?, 0)`,
+         (session_id, measured_at, latitude, longitude, distance_left, distance_right, speed, accuracy_gps, synced) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         [
           measurement.session_id,
           measurement.measured_at,
@@ -54,6 +68,8 @@ export class DatabaseService {
           measurement.longitude,
           measurement.distance_left,
           measurement.distance_right,
+          measurement.speed,
+          measurement.accuracy_gps,
         ]
       );
     } catch (error) {

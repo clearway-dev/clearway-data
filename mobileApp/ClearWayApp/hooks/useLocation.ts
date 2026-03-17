@@ -5,6 +5,7 @@ export interface LocationData {
   latitude: number;
   longitude: number;
   accuracy: number | null;
+  speed: number | null;
 }
 
 export const useLocation = (enabled: boolean) => {
@@ -58,6 +59,7 @@ export const useLocation = (enabled: boolean) => {
             latitude: currentLocation.coords.latitude,
             longitude: currentLocation.coords.longitude,
             accuracy: currentLocation.coords.accuracy,
+            speed: currentLocation.coords.speed,
           });
         } catch (err) {
           console.error('Failed to get location:', err);
