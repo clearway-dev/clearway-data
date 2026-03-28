@@ -23,6 +23,21 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Track the configuration for which session was created
+  const [sessionVehicleId, setSessionVehicleId] = useState<string | null>(null);
+  const [sessionSensorId, setSessionSensorId] = useState<string | null>(null);
+  
+  // Check if current selection matches session configuration
+  const configurationChanged = sessionId && (
+    selectedVehicleId !== sessionVehicleId || 
+    selectedSensorId !== sessionSensorId
+  );
+  
+  // Check if we're back to original configuration
+  const isOriginalConfiguration = sessionId && 
+    selectedVehicleId === sessionVehicleId && 
+    selectedSensorId === sessionSensorId;
 
   // Initialize database and load data
   useEffect(() => {
@@ -59,30 +74,61 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
     initialize();
   }, []);
 
-  // Generate new session_id whenever vehicle or sensor changes
-  useEffect(() => {
-    const createSession = async () => {
-      if (!selectedVehicleId || !selectedSensorId) {
-        setSessionId(null);
-        return;
-      }
+  // Manual session creation handler
+  const handleCreateSession = async () => {
+    if (!selectedVehicleId || !selectedSensorId) {
+      Alert.alert('Chyba', 'Vyberte vozidlo a senzor');
+      return;
+    }
 
-      setIsLoading(true);
-      try {
-        const session = await ApiService.createSession(selectedVehicleId, selectedSensorId);
-        setSessionId(session.id);
-        console.log('✓ New session created:', session.id);
-      } catch (error) {
-        console.error('Failed to create session:', error);
-        setSessionId(null);
-        Alert.alert('Chyba', 'Nepodařilo se vytvořit novou jízdu. Zkontrolujte připojení k serveru.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    // If we're back to original configuration, ask user
+    if (isOriginalConfiguration) {
+      Alert.alert(
+        'Session již existuje',
+        'Pro tuto kombinaci vozidla a senzoru již existuje Session ID. Chcete použít existující, nebo vytvořit novou?',
+        [
+          { text: 'Zrušit', style: 'cancel' },
+          {
+            text: 'Použít existující',
+            onPress: () => {
+              // Just keep current session, no action needed
+              console.log('✓ Using existing session:', sessionId);
+            },
+          },
+          {
+            text: 'Vytvořit novou',
+            style: 'default',
+            onPress: async () => {
+              await createNewSession();
+            },
+          },
+        ]
+      );
+      return;
+    }
 
-    createSession();
-  }, [selectedVehicleId, selectedSensorId]);
+    // Otherwise create new session
+    await createNewSession();
+  };
+
+  const createNewSession = async () => {
+    if (!selectedVehicleId || !selectedSensorId) return;
+
+    setIsLoading(true);
+    try {
+      const session = await ApiService.createSession(selectedVehicleId, selectedSensorId);
+      setSessionId(session.id);
+      setSessionVehicleId(selectedVehicleId);
+      setSessionSensorId(selectedSensorId);
+      console.log('✓ New session created:', session.id);
+    } catch (error) {
+      console.error('Failed to create session:', error);
+      setSessionId(null);
+      Alert.alert('Chyba', 'Nepodařilo se vytvořit novou jízdu. Zkontrolujte připojení k serveru.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleStartMeasurement = () => {
     if (!sessionId || !selectedVehicleId || !selectedSensorId) {
@@ -110,7 +156,8 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
     );
   }
 
-  const canStartMeasurement = !isLoading && sessionId && selectedVehicleId && selectedSensorId;
+  // Can start only if session exists and configuration hasn't changed
+  const canStartMeasurement = !isLoading && sessionId && !configurationChanged;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -173,19 +220,26 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
         )}
       </Card>
 
-      {/* Session Info */}
-      {isLoading && (
-        <Card style={styles.card}>
-          <ActivityIndicator size="small" color="#18181b" />
-          <Text style={styles.infoText}>Vytváření nové jízdy...</Text>
-        </Card>
-      )}
+      {/* Create Session Button */}
+      <Button
+        title={isLoading ? "Vytváření jízdy..." : "Vytvořit jízdu"}
+        onPress={handleCreateSession}
+        disabled={isLoading || !selectedVehicleId || !selectedSensorId}
+        variant="secondary"
+        style={styles.createSessionButton}
+      />
 
+      {/* Session Info */}
       {sessionId && !isLoading && (
-        <Card style={[styles.card, styles.successCard]}>
+        <Card style={[styles.card, configurationChanged ? styles.warningCard : styles.successCard]}>
           <Text style={styles.label}>Session ID:</Text>
           <Text style={styles.sessionId}>{sessionId}</Text>
-          <Text style={styles.successText}>✓ Nová jízda připravena</Text>
+          
+          {configurationChanged ? (
+            <Text style={styles.warningText}>⚠ Konfigurace se změnila - vygenerujte novou jízdu</Text>
+          ) : (
+            <Text style={styles.successText}>✓ Jízda připravena</Text>
+          )}
         </Card>
       )}
 
@@ -197,9 +251,15 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
         style={styles.startButton}
       />
 
-      {!canStartMeasurement && !isLoading && (
+      {!sessionId && !isLoading && (
         <Text style={styles.hintText}>
-          Vyberte vozidlo a senzor pro vytvoření nové jízdy
+          Vygenerujte jízdu tlačítkem "Vytvořit jízdu"
+        </Text>
+      )}
+      
+      {configurationChanged && (
+        <Text style={styles.hintText}>
+          Konfigurace se změnila. Vygenerujte novou jízdu pro pokračování.
         </Text>
       )}
     </ScrollView>
@@ -245,6 +305,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
     borderColor: '#86efac',
   },
+  warningCard: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fbbf24',
+  },
   label: {
     fontSize: 14,
     fontWeight: '500',
@@ -262,6 +326,11 @@ const styles = StyleSheet.create({
     color: '#16a34a',
     fontWeight: '500',
   },
+  warningText: {
+    fontSize: 14,
+    color: '#d97706',
+    fontWeight: '500',
+  },
   errorText: {
     color: '#dc2626',
     fontSize: 14,
@@ -271,6 +340,11 @@ const styles = StyleSheet.create({
     color: '#71717a',
     marginTop: 8,
     textAlign: 'center',
+  },
+  createSessionButton: {
+    marginTop: 8,
+    marginBottom: 16,
+    paddingVertical: 12,
   },
   startButton: {
     marginTop: 24,
