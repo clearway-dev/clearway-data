@@ -5,10 +5,10 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ApiService } from '../services/api.service';
 import { DatabaseService } from '../services/database.service';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Vehicle, Sensor } from '../types/navigation';
 
-type SetupScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Setup'>;
+type SetupScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Setup'>;
 
 interface Props {
   navigation: SetupScreenNavigationProp;

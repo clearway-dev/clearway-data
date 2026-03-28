@@ -6,11 +6,11 @@ import { Card } from '../components/ui/Card';
 import { BackendStatusBar } from '../components/BackendStatusBar';
 import { useMeasurement } from '../hooks/useMeasurement';
 import { useSync } from '../hooks/useSync';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
 
-type MeasurementScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Measurement'>;
+type MeasurementScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Measurement'>;
 type MeasurementScreenRouteProp = RouteProp<RootStackParamList, 'Measurement'>;
 
 interface Props {

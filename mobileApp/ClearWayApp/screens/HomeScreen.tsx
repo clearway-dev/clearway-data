@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { Button } from '../components/ui/Button';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 
-type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
+type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
 interface Props {
   navigation: HomeScreenNavigationProp;
