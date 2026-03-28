@@ -41,15 +41,16 @@ const simulateDistances = (): { distance_left: number; distance_right: number } 
   };
 };
 
-const simulateSpeed = () => {
-  // 5-15 m/s (~18-54 km/h) for realistic city driving simulation
-  return Math.random() * 10 + 5;
-};
+// ❌ VYPNUTO: Simulace speed a accuracy - používáme jen reálná GPS data
+// const simulateSpeed = () => {
+//   // 5-15 m/s (~18-54 km/h) for realistic city driving simulation
+//   return Math.random() * 10 + 5;
+// };
 
-const simulateGpsAccuracy = () => {
-  // Typical mobile GPS horizontal accuracy in meters
-  return Math.random() * 12 + 3;
-};
+// const simulateGpsAccuracy = () => {
+//   // Typical mobile GPS horizontal accuracy in meters
+//   return Math.random() * 12 + 3;
+// };
 
 export const useMeasurement = (sessionId: string | null) => {
   const [isRecording, setIsRecording] = useState(false);
@@ -122,8 +123,14 @@ export const useMeasurement = (sessionId: string | null) => {
           }
 
           const { distance_left, distance_right } = distances;
-          const speed = location.speed != null && location.speed >= 0 ? location.speed : simulateSpeed();
-          const accuracy_gps = location.accuracy ?? simulateGpsAccuracy();
+          
+          // ❌ VYPNUTO: Simulace rychlosti a přesnosti - používáme jen reálná data z GPS
+          // const speed = location.speed != null && location.speed >= 0 ? location.speed : simulateSpeed();
+          // const accuracy_gps = location.accuracy ?? simulateGpsAccuracy();
+          
+          // ✅ Posílat pouze reálné hodnoty z GPS (může být null/undefined)
+          const speed = location.speed != null && location.speed >= 0 ? location.speed : null;
+          const accuracy_gps = location.accuracy ?? null;
 
           await DatabaseService.insertMeasurement({
             session_id: sessionId,

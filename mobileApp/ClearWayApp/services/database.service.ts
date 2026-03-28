@@ -20,8 +20,8 @@ export class DatabaseService {
           longitude REAL NOT NULL,
           distance_left REAL NOT NULL,
           distance_right REAL NOT NULL,
-          speed REAL NOT NULL DEFAULT 0,
-          accuracy_gps REAL NOT NULL DEFAULT 0,
+          speed REAL,
+          accuracy_gps REAL,
           synced INTEGER DEFAULT 0
         );
         
@@ -34,11 +34,11 @@ export class DatabaseService {
       const columnNames = new Set(columns.map((c) => c.name));
 
       if (!columnNames.has('speed')) {
-        await this.db.execAsync('ALTER TABLE local_measurements ADD COLUMN speed REAL NOT NULL DEFAULT 0;');
+        await this.db.execAsync('ALTER TABLE local_measurements ADD COLUMN speed REAL;');
       }
 
       if (!columnNames.has('accuracy_gps')) {
-        await this.db.execAsync('ALTER TABLE local_measurements ADD COLUMN accuracy_gps REAL NOT NULL DEFAULT 0;');
+        await this.db.execAsync('ALTER TABLE local_measurements ADD COLUMN accuracy_gps REAL;');
       }
       
       console.log('✓ Database initialized');

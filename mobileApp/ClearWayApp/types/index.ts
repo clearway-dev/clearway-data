@@ -26,8 +26,8 @@ export interface LocalMeasurement {
   longitude: number;
   distance_left: number;
   distance_right: number;
-  speed: number;
-  accuracy_gps: number;
+  speed: number | null; // Může být null pokud GPS neposkytuje rychlost
+  accuracy_gps: number | null; // Může být null pokud GPS neposkytuje přesnost
   synced: number; // 0 or 1 (SQLite boolean)
 }
 
@@ -37,8 +37,8 @@ export interface MeasurementItem {
   longitude: number;
   distance_left: number;
   distance_right: number;
-  speed: number;
-  accuracy_gps: number;
+  speed: number | null; // Může být null pokud GPS neposkytuje rychlost
+  accuracy_gps: number | null; // Může být null pokud GPS neposkytuje přesnost
 }
 
 export interface MeasurementBatch {
