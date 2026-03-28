@@ -3,6 +3,8 @@ name: CD Production
 on:
   push:
     branches: ["main"]
+    paths:
+      - 'backend/**' # Spustí se JEN když upravíš něco ve složce "backend"
 
 env:
   REGISTRY: ghcr.io

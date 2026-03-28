@@ -1,10 +1,11 @@
 import { DatabaseService } from './database.service';
 import { ApiService } from './api.service';
-import { MeasurementBatch } from '../types';
+import { MeasurementBatch, SyncStatus } from '../types';
 
 export class SyncService {
   private static intervalId: NodeJS.Timeout | null = null;
   private static isSyncing: boolean = false;
+  private static listeners: ((status: SyncStatus) => void)[] = [];
 
   /**
    * Start background sync worker
@@ -56,10 +57,16 @@ export class SyncService {
       
       if (measurements.length === 0) {
         // No measurements to sync
+        this.emitStatus({ status: 'idle' });
         return;
       }
 
       console.log(`🔄 Syncing ${measurements.length} measurements...`);
+      this.emitStatus({ 
+        status: 'syncing', 
+        message: `Odesílám ${measurements.length} měření...`,
+        timestamp: Date.now()
+      });
 
       // Group by session_id (there should be only one active session)
       const groupedBySession = measurements.reduce((acc, m) => {
@@ -94,8 +101,18 @@ export class SyncService {
           await DatabaseService.markAsSynced(ids);
           
           console.log(`✓ Session ${sessionId}: ${sessionMeasurements.length} measurements synced`);
+          this.emitStatus({ 
+            status: 'success', 
+            message: `Dávka odeslána (${sessionMeasurements.length} měření)`,
+            timestamp: Date.now()
+          });
         } catch (error) {
           console.error(`✗ Failed to sync session ${sessionId}:`, error);
+          this.emitStatus({ 
+            status: 'error', 
+            message: 'Server nedostupný',
+            timestamp: Date.now()
+          });
           // Don't throw - let other sessions continue syncing
         }
       }
@@ -105,6 +122,11 @@ export class SyncService {
       
     } catch (error) {
       console.error('Sync error:', error);
+      this.emitStatus({ 
+        status: 'error', 
+        message: 'Chyba synchronizace',
+        timestamp: Date.now()
+      });
     } finally {
       this.isSyncing = false;
     }
@@ -115,5 +137,23 @@ export class SyncService {
    */
   static async forceSync(): Promise<void> {
     await this.syncOnce();
+  }
+
+  /**
+   * Subscribe to sync status updates
+   */
+  static subscribe(listener: (status: SyncStatus) => void): () => void {
+    this.listeners.push(listener);
+    // Return unsubscribe function
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
+  }
+
+  /**
+   * Emit sync status to all listeners
+   */
+  private static emitStatus(status: SyncStatus): void {
+    this.listeners.forEach(listener => listener(status));
   }
 }

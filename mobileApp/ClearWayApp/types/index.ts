@@ -45,3 +45,10 @@ export interface MeasurementBatch {
   session_id: string;
   measurements: MeasurementItem[];
 }
+
+export interface SyncStatus {
+  status: 'idle' | 'syncing' | 'success' | 'error';
+  message?: string;
+  timestamp?: number;
+}
+

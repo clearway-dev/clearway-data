@@ -1,13 +1,13 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { HomeScreen } from './screens/HomeScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { MeasurementScreen } from './screens/MeasurementScreen';
 import { RootStackParamList } from './types/navigation';
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Stack = createStackNavigator<RootStackParamList>();
 
 export default function App() {
   return (
@@ -17,7 +17,7 @@ export default function App() {
         initialRouteName="Home"
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#fafafa' },
+          cardStyle: { backgroundColor: '#fafafa' },
         }}
       >
         <Stack.Screen name="Home" component={HomeScreen} />
@@ -27,4 +27,3 @@ export default function App() {
     </NavigationContainer>
   );
 }
-
