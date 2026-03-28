@@ -79,7 +79,59 @@ export class DatabaseService {
   }
 
   /**
-   * Get unsynced measurements (max 100)
+   * Get all unique session IDs that have unsynced measurements
+   * Ordered by oldest measurement first (FIFO)
+   */
+  static async getUnsyncedSessionIds(): Promise<string[]> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.getAllAsync<{ session_id: string }>(
+        `SELECT session_id, MIN(measured_at) as oldest_measurement
+         FROM local_measurements 
+         WHERE synced = 0 
+         GROUP BY session_id
+         ORDER BY oldest_measurement ASC`
+      );
+      
+      return result.map(r => r.session_id);
+    } catch (error) {
+      console.error('Failed to fetch unsynced session IDs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get unsynced measurements for a specific session
+   * @param sessionId - The session ID to fetch measurements for
+   * @param limit - Maximum number of measurements to fetch (default 1500)
+   */
+  static async getUnsyncedMeasurementsBySession(sessionId: string, limit: number = 1500): Promise<LocalMeasurement[]> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.getAllAsync<LocalMeasurement>(
+        `SELECT * FROM local_measurements 
+         WHERE synced = 0 AND session_id = ? 
+         ORDER BY measured_at ASC 
+         LIMIT ?`,
+        [sessionId, limit]
+      );
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to fetch unsynced measurements by session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get unsynced measurements (max limit)
+   * @deprecated Use getUnsyncedSessionIds() and getUnsyncedMeasurementsBySession() instead
    */
   static async getUnsyncedMeasurements(limit: number = 100): Promise<LocalMeasurement[]> {
     if (!this.db) {

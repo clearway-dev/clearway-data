@@ -42,7 +42,7 @@ export class SyncService {
 
   /**
    * Perform one sync cycle
-   * Sends up to MAX_BATCH_SIZE measurements per cycle
+   * Processes sessions one by one, sending up to MAX_BATCH_SIZE measurements per session
    */
   static async syncOnce(): Promise<void> {
     // Prevent concurrent syncs
@@ -54,65 +54,78 @@ export class SyncService {
     this.isSyncing = true;
 
     try {
-      // Get unsynced measurements from SQLite (limit to MAX_BATCH_SIZE)
-      const measurements = await DatabaseService.getUnsyncedMeasurements(SyncConfig.MAX_BATCH_SIZE);
+      // Step 1: Get all unique session IDs with unsynced measurements (ordered by oldest first)
+      const unsyncedSessions = await DatabaseService.getUnsyncedSessionIds();
       
-      if (measurements.length === 0) {
+      if (unsyncedSessions.length === 0) {
         // No measurements to sync
         this.emitStatus({ status: 'idle' });
         return;
       }
 
-      console.log(`🔄 Syncing ${measurements.length} measurements (max batch size: ${SyncConfig.MAX_BATCH_SIZE})...`);
-      this.emitStatus({ 
-        status: 'syncing', 
-        message: `Odesílám ${measurements.length} měření...`,
-        timestamp: Date.now()
-      });
+      console.log(`🔄 Found ${unsyncedSessions.length} session(s) with unsynced data`);
 
-      // Group by session_id (there should be only one active session)
-      const groupedBySession = measurements.reduce((acc, m) => {
-        if (!acc[m.session_id]) {
-          acc[m.session_id] = [];
-        }
-        acc[m.session_id].push(m);
-        return acc;
-      }, {} as Record<string, typeof measurements>);
+      let totalSynced = 0;
+      let totalFailed = 0;
 
-      // Send batch for each session
-      for (const [sessionId, sessionMeasurements] of Object.entries(groupedBySession)) {
-        const batch: MeasurementBatch = {
-          session_id: sessionId,
-          measurements: sessionMeasurements.map(m => ({
-            measured_at: m.measured_at,
-            latitude: m.latitude,
-            longitude: m.longitude,
-            distance_left: m.distance_left,
-            distance_right: m.distance_right,
-            speed: m.speed,
-            accuracy_gps: m.accuracy_gps,
-          })),
-        };
-
+      // Step 2: Process each session one by one
+      for (const sessionId of unsyncedSessions) {
         try {
+          // Get unsynced measurements for this session only (limit to MAX_BATCH_SIZE)
+          const measurements = await DatabaseService.getUnsyncedMeasurementsBySession(
+            sessionId, 
+            SyncConfig.MAX_BATCH_SIZE
+          );
+
+          if (measurements.length === 0) {
+            console.log(`⚠️ Session ${sessionId}: No measurements found (race condition?)`);
+            continue;
+          }
+
+          console.log(`📦 Session ${sessionId}: Syncing ${measurements.length} measurements (max: ${SyncConfig.MAX_BATCH_SIZE})...`);
+          
+          this.emitStatus({ 
+            status: 'syncing', 
+            message: `Odesílám session ${sessionId.substring(0, 8)}... (${measurements.length} měření)`,
+            timestamp: Date.now()
+          });
+
+          // Build batch for this session
+          const batch: MeasurementBatch = {
+            session_id: sessionId,
+            measurements: measurements.map(m => ({
+              measured_at: m.measured_at,
+              latitude: m.latitude,
+              longitude: m.longitude,
+              distance_left: m.distance_left,
+              distance_right: m.distance_right,
+              speed: m.speed,
+              accuracy_gps: m.accuracy_gps,
+            })),
+          };
+
           // Send to backend
           await ApiService.sendBatch(batch);
           
           // Mark as synced in local DB
-          const ids = sessionMeasurements.map(m => m.id);
+          const ids = measurements.map(m => m.id);
           await DatabaseService.markAsSynced(ids);
           
-          console.log(`✓ Session ${sessionId}: ${sessionMeasurements.length} measurements synced`);
+          totalSynced += measurements.length;
+          console.log(`✓ Session ${sessionId}: ${measurements.length} measurements synced successfully`);
+          
           this.emitStatus({ 
             status: 'success', 
-            message: `Dávka odeslána (${sessionMeasurements.length} měření)`,
+            message: `Session ${sessionId.substring(0, 8)}... odeslána (${measurements.length} měření)`,
             timestamp: Date.now()
           });
+
         } catch (error) {
+          totalFailed++;
           console.error(`✗ Failed to sync session ${sessionId}:`, error);
           this.emitStatus({ 
             status: 'error', 
-            message: 'Server nedostupný',
+            message: `Session ${sessionId.substring(0, 8)}... - server nedostupný`,
             timestamp: Date.now()
           });
           // Don't throw - let other sessions continue syncing
@@ -126,6 +139,11 @@ export class SyncService {
       
       // Check if there are more measurements to sync
       const remainingStats = await DatabaseService.getStats();
+      
+      if (totalSynced > 0) {
+        console.log(`✓ Sync completed: ${totalSynced} measurements synced, ${totalFailed} sessions failed`);
+      }
+      
       if (remainingStats.unsynced > 0) {
         console.log(`ℹ️ ${remainingStats.unsynced} measurements still pending sync (will be sent in next cycle)`);
         this.emitStatus({ 
