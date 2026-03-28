@@ -4,7 +4,6 @@ import { Picker } from '@react-native-picker/picker';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ApiService } from '../services/api.service';
-import { DatabaseService } from '../services/database.service';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Vehicle, Sensor } from '../types/navigation';
 
@@ -39,14 +38,11 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
     selectedVehicleId === sessionVehicleId && 
     selectedSensorId === sessionSensorId;
 
-  // Initialize database and load data
+  // Load data from API
   useEffect(() => {
     const initialize = async () => {
       try {
-        // Initialize SQLite
-        await DatabaseService.initialize();
-        
-        // Load vehicles and sensors
+        // Load vehicles and sensors (database is already initialized in App.tsx)
         const [vehiclesData, sensorsData] = await Promise.all([
           ApiService.getVehicles(),
           ApiService.getSensors(),

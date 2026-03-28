@@ -1,6 +1,7 @@
 import { DatabaseService } from './database.service';
 import { ApiService } from './api.service';
 import { MeasurementBatch, SyncStatus } from '../types';
+import { SyncConfig } from '../config/sync.config';
 
 export class SyncService {
   private static intervalId: NodeJS.Timeout | null = null;
@@ -9,9 +10,9 @@ export class SyncService {
 
   /**
    * Start background sync worker
-   * Runs every 10 seconds and sends max 100 measurements per batch
+   * Runs every SYNC_INTERVAL_MS and sends max MAX_BATCH_SIZE measurements per batch
    */
-  static startSync(intervalMs: number = 10000): void {
+  static startSync(intervalMs: number = SyncConfig.SYNC_INTERVAL_MS): void {
     if (this.intervalId) {
       console.warn('Sync already running');
       return;
@@ -41,6 +42,7 @@ export class SyncService {
 
   /**
    * Perform one sync cycle
+   * Sends up to MAX_BATCH_SIZE measurements per cycle
    */
   static async syncOnce(): Promise<void> {
     // Prevent concurrent syncs
@@ -52,8 +54,8 @@ export class SyncService {
     this.isSyncing = true;
 
     try {
-      // Get unsynced measurements from SQLite
-      const measurements = await DatabaseService.getUnsyncedMeasurements(100);
+      // Get unsynced measurements from SQLite (limit to MAX_BATCH_SIZE)
+      const measurements = await DatabaseService.getUnsyncedMeasurements(SyncConfig.MAX_BATCH_SIZE);
       
       if (measurements.length === 0) {
         // No measurements to sync
@@ -61,7 +63,7 @@ export class SyncService {
         return;
       }
 
-      console.log(`🔄 Syncing ${measurements.length} measurements...`);
+      console.log(`🔄 Syncing ${measurements.length} measurements (max batch size: ${SyncConfig.MAX_BATCH_SIZE})...`);
       this.emitStatus({ 
         status: 'syncing', 
         message: `Odesílám ${measurements.length} měření...`,
@@ -117,8 +119,28 @@ export class SyncService {
         }
       }
 
-      // Optional: Clean up old synced measurements
-      await DatabaseService.deleteSynced();
+      // Clean up synced measurements if configured
+      if (SyncConfig.DELETE_SYNCED_IMMEDIATELY) {
+        await DatabaseService.deleteSynced();
+      }
+      
+      // Check if there are more measurements to sync
+      const remainingStats = await DatabaseService.getStats();
+      if (remainingStats.unsynced > 0) {
+        console.log(`ℹ️ ${remainingStats.unsynced} measurements still pending sync (will be sent in next cycle)`);
+        this.emitStatus({ 
+          status: 'success', 
+          message: `Dávka odeslána. Zbývá ${remainingStats.unsynced} měření...`,
+          timestamp: Date.now()
+        });
+      } else {
+        console.log('✓ All measurements synced');
+        this.emitStatus({ 
+          status: 'success', 
+          message: 'Vše synchronizováno',
+          timestamp: Date.now()
+        });
+      }
       
     } catch (error) {
       console.error('Sync error:', error);

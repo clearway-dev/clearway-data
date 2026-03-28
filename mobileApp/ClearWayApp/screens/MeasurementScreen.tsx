@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, AppState, AppStateStatus } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -21,6 +21,8 @@ interface Props {
 export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
   const { sessionId } = route.params;
   const [isPaused, setIsPaused] = useState(false);
+  const [systemPaused, setSystemPaused] = useState(false); // Flag pro systémovou pauzu
+  const appState = useRef(AppState.currentState);
 
   // Hooks
   const { 
@@ -48,6 +50,48 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
       deactivateKeepAwake();
     };
   }, [isRecording, isPaused]);
+
+  // Handle app going to background (incoming call, app switch, etc.)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      console.log('AppState changed:', appState.current, '->', nextAppState);
+      
+      // Aplikace přechází do pozadí BĚHEM aktivního měření
+      if (
+        appState.current === 'active' &&
+        (nextAppState === 'background' || nextAppState === 'inactive') &&
+        isRecording &&
+        !isPaused
+      ) {
+        console.warn('⚠️ App going to background during active measurement - auto-pausing');
+        stopRecording();
+        setIsPaused(true);
+        setSystemPaused(true); // Označit, že pauza byla systémová
+      }
+      
+      // Aplikace se vrací do popředí
+      if (
+        (appState.current === 'background' || appState.current === 'inactive') &&
+        nextAppState === 'active' &&
+        systemPaused
+      ) {
+        console.log('✓ App returned to foreground - measurement paused by system');
+        // Uživatel se vrátil - zobrazíme alert, že měření bylo pozastaveno
+        Alert.alert(
+          'Měření pozastaveno',
+          'Měření bylo automaticky pozastaveno při odchodu aplikace na pozadí. Spusťte měření znovu tlačítkem "Pokračovat".',
+          [{ text: 'OK' }]
+        );
+        setSystemPaused(false); // Reset flagu
+      }
+
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isRecording, isPaused, systemPaused, stopRecording]);
 
   // Auto-start recording when screen loads
   React.useEffect(() => {
