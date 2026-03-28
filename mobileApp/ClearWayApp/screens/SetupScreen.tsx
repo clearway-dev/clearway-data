@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -129,9 +129,17 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
             selectedValue={selectedVehicleId}
             onValueChange={(value) => setSelectedVehicleId(value)}
             enabled={true}
+            style={{ color: 'black', backgroundColor: 'white' }}
+            dropdownIconColor="black"
           >
             {vehicles.map(v => (
-              <Picker.Item key={v.id} label={`${v.vehicle_name} (${v.width}cm)`} value={v.id} enabled={true} />
+              <Picker.Item 
+                key={v.id} 
+                label={`${v.vehicle_name} (${v.width}cm)`} 
+                value={v.id} 
+                enabled={true}
+                color={Platform.OS === 'android' ? 'black' : undefined}
+              />
             ))}
           </Picker>
         ) : (
@@ -147,9 +155,17 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
             selectedValue={selectedSensorId}
             onValueChange={(value) => setSelectedSensorId(value)}
             enabled={true}
+            style={{ color: 'black', backgroundColor: 'white' }}
+            dropdownIconColor="black"
           >
             {sensors.map(s => (
-              <Picker.Item key={s.id} label={s.description || `Senzor ${s.id}`} value={s.id} enabled={true} />
+              <Picker.Item 
+                key={s.id} 
+                label={s.description || `Senzor ${s.id}`} 
+                value={s.id} 
+                enabled={true}
+                color={Platform.OS === 'android' ? 'black' : undefined}
+              />
             ))}
           </Picker>
         ) : (
