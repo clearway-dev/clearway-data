@@ -3,6 +3,44 @@ import { MeasurementBatch, Vehicle, Sensor, Session } from '../types';
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
 const API_PREFIX = '/api';
 
+/**
+ * Custom error class that includes HTTP status code
+ * Used to differentiate between 4xx/5xx errors for poison pill detection
+ */
+export class ApiError extends Error {
+  constructor(
+    public statusCode: number,
+    public statusText: string,
+    public detail?: string
+  ) {
+    super(`HTTP ${statusCode}: ${detail || statusText}`);
+    this.name = 'ApiError';
+  }
+
+  /**
+   * Check if this is a client error (4xx)
+   */
+  isClientError(): boolean {
+    return this.statusCode >= 400 && this.statusCode < 500;
+  }
+
+  /**
+   * Check if this is a server error (5xx)
+   */
+  isServerError(): boolean {
+    return this.statusCode >= 500 && this.statusCode < 600;
+  }
+
+  /**
+   * Check if this error should mark measurements as poison pill
+   * 4xx errors = client error (bad data) = poison pill
+   * 5xx errors = server error (temporary) = retry later
+   */
+  isPoisonPill(): boolean {
+    return this.isClientError();
+  }
+}
+
 export class ApiService {
   /**
    * Get list of available vehicles from backend
@@ -100,6 +138,7 @@ export class ApiService {
 
   /**
    * Send batch of measurements to backend
+   * Throws ApiError with status code for proper error handling
    */
   static async sendBatch(batch: MeasurementBatch): Promise<void> {
     try {
@@ -118,12 +157,27 @@ export class ApiService {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to send batch');
+        let detail: string | undefined;
+        
+        try {
+          const errorData = await response.json();
+          detail = errorData.detail || errorData.message;
+        } catch {
+          // Response body is not JSON, use status text
+          detail = response.statusText;
+        }
+        
+        throw new ApiError(response.status, response.statusText, detail);
       }
       
       console.log(`✓ Batch sent: ${batch.measurements.length} measurements`);
     } catch (error) {
+      // Re-throw ApiError as-is
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      
+      // Wrap other errors (network, timeout, etc.)
       console.error('Failed to send batch:', error);
       throw error;
     }

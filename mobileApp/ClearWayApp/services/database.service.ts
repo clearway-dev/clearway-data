@@ -22,14 +22,16 @@ export class DatabaseService {
           distance_right REAL NOT NULL,
           speed REAL,
           accuracy_gps REAL,
-          synced INTEGER DEFAULT 0
+          synced INTEGER DEFAULT 0,
+          error_message TEXT,
+          error_at TEXT
         );
         
         CREATE INDEX IF NOT EXISTS idx_synced ON local_measurements(synced);
         CREATE INDEX IF NOT EXISTS idx_session ON local_measurements(session_id);
       `);
 
-      // Lightweight migration for existing DBs created before speed/accuracy fields.
+      // Lightweight migration for existing DBs created before speed/accuracy/error fields.
       const columns = await this.db.getAllAsync<{ name: string }>('PRAGMA table_info(local_measurements)');
       const columnNames = new Set(columns.map((c) => c.name));
 
@@ -39,6 +41,14 @@ export class DatabaseService {
 
       if (!columnNames.has('accuracy_gps')) {
         await this.db.execAsync('ALTER TABLE local_measurements ADD COLUMN accuracy_gps REAL;');
+      }
+
+      if (!columnNames.has('error_message')) {
+        await this.db.execAsync('ALTER TABLE local_measurements ADD COLUMN error_message TEXT;');
+      }
+
+      if (!columnNames.has('error_at')) {
+        await this.db.execAsync('ALTER TABLE local_measurements ADD COLUMN error_at TEXT;');
       }
       
       console.log('✓ Database initialized');
@@ -51,7 +61,7 @@ export class DatabaseService {
   /**
    * Insert measurement into local database
    */
-  static async insertMeasurement(measurement: Omit<LocalMeasurement, 'id' | 'synced'>): Promise<void> {
+  static async insertMeasurement(measurement: Omit<LocalMeasurement, 'id' | 'synced' | 'error_message' | 'error_at'>): Promise<void> {
     if (!this.db) {
       throw new Error('Database not initialized');
     }
@@ -81,6 +91,7 @@ export class DatabaseService {
   /**
    * Get all unique session IDs that have unsynced measurements
    * Ordered by oldest measurement first (FIFO)
+   * Excludes sessions with only error records (synced = -1)
    */
   static async getUnsyncedSessionIds(): Promise<string[]> {
     if (!this.db) {
@@ -153,6 +164,7 @@ export class DatabaseService {
 
   /**
    * Mark measurements as synced
+   * @deprecated Use deleteMeasurements() instead - we now delete synced data immediately
    */
   static async markAsSynced(ids: number[]): Promise<void> {
     if (!this.db) {
@@ -171,6 +183,60 @@ export class DatabaseService {
       console.log(`✓ Marked ${ids.length} measurements as synced`);
     } catch (error) {
       console.error('Failed to mark measurements as synced:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark measurements as failed (poison pill)
+   * Sets synced = -1 to prevent infinite retry loops
+   */
+  static async markAsError(ids: number[], errorMessage: string): Promise<void> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (ids.length === 0) return;
+
+    try {
+      const placeholders = ids.map(() => '?').join(',');
+      const errorAt = new Date().toISOString();
+      
+      await this.db.runAsync(
+        `UPDATE local_measurements 
+         SET synced = -1, error_message = ?, error_at = ? 
+         WHERE id IN (${placeholders})`,
+        [errorMessage, errorAt, ...ids]
+      );
+      
+      console.log(`⚠️ Marked ${ids.length} measurements as error (poison pill)`);
+    } catch (error) {
+      console.error('Failed to mark measurements as error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete measurements by IDs (used after successful sync)
+   * This is the Garbage Collector - removes data immediately after server confirms receipt
+   */
+  static async deleteMeasurements(ids: number[]): Promise<void> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (ids.length === 0) return;
+
+    try {
+      const placeholders = ids.map(() => '?').join(',');
+      const result = await this.db.runAsync(
+        `DELETE FROM local_measurements WHERE id IN (${placeholders})`,
+        ids
+      );
+      
+      console.log(`🗑️ Deleted ${result.changes} measurements (garbage collected)`);
+    } catch (error) {
+      console.error('Failed to delete measurements:', error);
       throw error;
     }
   }
@@ -198,7 +264,7 @@ export class DatabaseService {
   /**
    * Get total count of measurements in database
    */
-  static async getStats(): Promise<{ total: number; unsynced: number }> {
+  static async getStats(): Promise<{ total: number; unsynced: number; errors: number }> {
     if (!this.db) {
       throw new Error('Database not initialized');
     }
@@ -212,12 +278,82 @@ export class DatabaseService {
         'SELECT COUNT(*) as count FROM local_measurements WHERE synced = 0'
       );
       
+      const errorsResult = await this.db.getFirstAsync<{ count: number }>(
+        'SELECT COUNT(*) as count FROM local_measurements WHERE synced = -1'
+      );
+      
       return {
         total: totalResult?.count || 0,
         unsynced: unsyncedResult?.count || 0,
+        errors: errorsResult?.count || 0,
       };
     } catch (error) {
       console.error('Failed to get database stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get error records (poison pills) for debugging
+   */
+  static async getErrorRecords(limit: number = 100): Promise<LocalMeasurement[]> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.getAllAsync<LocalMeasurement>(
+        'SELECT * FROM local_measurements WHERE synced = -1 ORDER BY error_at DESC LIMIT ?',
+        [limit]
+      );
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to fetch error records:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear all error records (poison pills)
+   * Use this to give failed measurements another chance after fixing backend issues
+   */
+  static async clearErrorRecords(): Promise<number> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.runAsync(
+        'DELETE FROM local_measurements WHERE synced = -1'
+      );
+      
+      console.log(`✓ Cleared ${result.changes} error records`);
+      return result.changes || 0;
+    } catch (error) {
+      console.error('Failed to clear error records:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Retry error records by resetting them to unsynced state
+   * Use this after fixing backend validation issues
+   */
+  static async retryErrorRecords(): Promise<number> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.runAsync(
+        'UPDATE local_measurements SET synced = 0, error_message = NULL, error_at = NULL WHERE synced = -1'
+      );
+      
+      console.log(`✓ Reset ${result.changes} error records to retry`);
+      return result.changes || 0;
+    } catch (error) {
+      console.error('Failed to retry error records:', error);
       throw error;
     }
   }

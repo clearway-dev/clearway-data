@@ -1,5 +1,5 @@
 import { DatabaseService } from './database.service';
-import { ApiService } from './api.service';
+import { ApiService, ApiError } from './api.service';
 import { MeasurementBatch, SyncStatus } from '../types';
 import { SyncConfig } from '../config/sync.config';
 
@@ -67,6 +67,7 @@ export class SyncService {
 
       let totalSynced = 0;
       let totalFailed = 0;
+      let totalPoisonPills = 0;
 
       // Step 2: Process each session one by one
       for (const sessionId of unsyncedSessions) {
@@ -107,12 +108,12 @@ export class SyncService {
           // Send to backend
           await ApiService.sendBatch(batch);
           
-          // Mark as synced in local DB
+          // ✅ SUCCESS: Delete measurements immediately (Garbage Collector)
           const ids = measurements.map(m => m.id);
-          await DatabaseService.markAsSynced(ids);
+          await DatabaseService.deleteMeasurements(ids);
           
           totalSynced += measurements.length;
-          console.log(`✓ Session ${sessionId}: ${measurements.length} measurements synced successfully`);
+          console.log(`✓ Session ${sessionId}: ${measurements.length} measurements synced and deleted`);
           
           this.emitStatus({ 
             status: 'success', 
@@ -121,27 +122,41 @@ export class SyncService {
           });
 
         } catch (error) {
-          totalFailed++;
-          console.error(`✗ Failed to sync session ${sessionId}:`, error);
-          this.emitStatus({ 
-            status: 'error', 
-            message: `Session ${sessionId.substring(0, 8)}... - server nedostupný`,
-            timestamp: Date.now()
-          });
+          // Check if this is a Poison Pill (4xx error)
+          if (error instanceof ApiError && error.isPoisonPill()) {
+            // Mark as error in database (synced = -1)
+            const measurements = await DatabaseService.getUnsyncedMeasurementsBySession(sessionId, SyncConfig.MAX_BATCH_SIZE);
+            const ids = measurements.map(m => m.id);
+            
+            await DatabaseService.markAsError(ids, error.message);
+            
+            totalPoisonPills += measurements.length;
+            console.error(`☠️ Session ${sessionId}: Poison pill detected (${error.statusCode}) - ${measurements.length} measurements marked as error`);
+            
+            this.emitStatus({ 
+              status: 'error', 
+              message: `Session ${sessionId.substring(0, 8)}... - chyba dat (${error.statusCode})`,
+              timestamp: Date.now()
+            });
+          } else {
+            // Server error (5xx) or network error - will retry later
+            totalFailed++;
+            console.error(`✗ Failed to sync session ${sessionId}:`, error);
+            this.emitStatus({ 
+              status: 'error', 
+              message: `Session ${sessionId.substring(0, 8)}... - server nedostupný`,
+              timestamp: Date.now()
+            });
+          }
           // Don't throw - let other sessions continue syncing
         }
       }
 
-      // Clean up synced measurements if configured
-      if (SyncConfig.DELETE_SYNCED_IMMEDIATELY) {
-        await DatabaseService.deleteSynced();
-      }
-      
       // Check if there are more measurements to sync
       const remainingStats = await DatabaseService.getStats();
       
-      if (totalSynced > 0) {
-        console.log(`✓ Sync completed: ${totalSynced} measurements synced, ${totalFailed} sessions failed`);
+      if (totalSynced > 0 || totalPoisonPills > 0) {
+        console.log(`✓ Sync completed: ${totalSynced} synced & deleted, ${totalPoisonPills} poison pills, ${totalFailed} sessions failed`);
       }
       
       if (remainingStats.unsynced > 0) {
@@ -149,6 +164,13 @@ export class SyncService {
         this.emitStatus({ 
           status: 'success', 
           message: `Dávka odeslána. Zbývá ${remainingStats.unsynced} měření...`,
+          timestamp: Date.now()
+        });
+      } else if (remainingStats.errors > 0) {
+        console.log(`⚠️ All valid measurements synced. ${remainingStats.errors} error records (poison pills) remain.`);
+        this.emitStatus({ 
+          status: 'success', 
+          message: `Synchronizováno. ${remainingStats.errors} chybných záznamů.`,
           timestamp: Date.now()
         });
       } else {

@@ -27,12 +27,4 @@ export const SyncConfig = {
    * @default 30000 (30 seconds)
    */
   RETRY_DELAY_MS: 30000,
-
-  /**
-   * Whether to delete synced measurements immediately after successful sync
-   * If false, they remain in the database for local analytics
-   * 
-   * @default true
-   */
-  DELETE_SYNCED_IMMEDIATELY: true,
 } as const;

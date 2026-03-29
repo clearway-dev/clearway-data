@@ -28,7 +28,9 @@ export interface LocalMeasurement {
   distance_right: number;
   speed: number | null; // Může být null pokud GPS neposkytuje rychlost
   accuracy_gps: number | null; // Může být null pokud GPS neposkytuje přesnost
-  synced: number; // 0 or 1 (SQLite boolean)
+  synced: number; // 0 = pending, 1 = synced successfully, -1 = error (poison pill)
+  error_message: string | null; // Error message if synced = -1
+  error_at: string | null; // ISO timestamp when error occurred
 }
 
 export interface MeasurementItem {
