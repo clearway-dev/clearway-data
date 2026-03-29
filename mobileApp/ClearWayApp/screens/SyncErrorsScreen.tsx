@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
@@ -31,6 +32,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [retryingSessionId, setRetryingSessionId] = useState<string | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   const loadErrorGroups = useCallback(async () => {
     try {
@@ -76,8 +78,51 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  const handleDelete = (sessionId: string, count: number) => {
+    const sessionIdShort = sessionId.substring(0, 8);
+    
+    Alert.alert(
+      'Smazat chybová data',
+      `Opravdu chcete smazat ${count} ${count === 1 ? 'záznam' : count < 5 ? 'záznamy' : 'záznamů'} z jízdy ${sessionIdShort}...?\n\nTato akce je nevratná.`,
+      [
+        {
+          text: 'Zrušit',
+          style: 'cancel',
+        },
+        {
+          text: 'Smazat',
+          style: 'destructive',
+          onPress: () => confirmDelete(sessionId),
+        },
+      ]
+    );
+  };
+
+  const confirmDelete = async (sessionId: string) => {
+    try {
+      setDeletingSessionId(sessionId);
+      
+      // Delete error records for this session
+      const count = await DatabaseService.deleteErrorRecordsBySession(sessionId);
+      
+      if (count > 0) {
+        console.log(`🗑️ Deleted ${count} error records for session ${sessionId}`);
+        
+        // Reload the list
+        await loadErrorGroups();
+      }
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+      Alert.alert('Chyba', 'Nepodařilo se smazat data. Zkuste to znovu.');
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
+
   const renderErrorCard = ({ item }: { item: ErrorSessionGroup }) => {
     const isRetrying = retryingSessionId === item.session_id;
+    const isDeleting = deletingSessionId === item.session_id;
+    const isProcessing = isRetrying || isDeleting;
     const sessionIdShort = item.session_id.substring(0, 8);
     const errorDate = item.first_error_at 
       ? new Date(item.first_error_at).toLocaleString('cs-CZ')
@@ -104,17 +149,31 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         )}
 
-        <TouchableOpacity
-          style={[styles.retryButton, isRetrying && styles.retryButtonDisabled]}
-          onPress={() => handleRetry(item.session_id)}
-          disabled={isRetrying}
-        >
-          {isRetrying ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.retryButtonText}>Zkusit znovu</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.retryButton, isProcessing && styles.buttonDisabled]}
+            onPress={() => handleRetry(item.session_id)}
+            disabled={isProcessing}
+          >
+            {isRetrying ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.retryButtonText}>Zkusit znovu</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.deleteButton, isProcessing && styles.buttonDisabled]}
+            onPress={() => handleDelete(item.session_id, item.count)}
+            disabled={isProcessing}
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#dc2626" />
+            ) : (
+              <Text style={styles.deleteButtonText}>Smazat</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -289,7 +348,12 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     lineHeight: 20,
   },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   retryButton: {
+    flex: 1,
     backgroundColor: '#3b82f6',
     borderRadius: 8,
     paddingVertical: 12,
@@ -297,13 +361,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
   },
-  retryButtonDisabled: {
-    backgroundColor: '#93c5fd',
+  deleteButton: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   retryButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#dc2626',
   },
   emptyState: {
     flex: 1,

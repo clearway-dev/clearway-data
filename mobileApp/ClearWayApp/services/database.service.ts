@@ -382,6 +382,29 @@ export class DatabaseService {
   }
 
   /**
+   * Delete error records for a specific session
+   * Use this for manual deletion of permanently failed sessions from SyncErrorsScreen
+   */
+  static async deleteErrorRecordsBySession(sessionId: string): Promise<number> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.runAsync(
+        'DELETE FROM local_measurements WHERE synced = -1 AND session_id = ?',
+        [sessionId]
+      );
+      
+      console.log(`🗑️ Deleted ${result.changes} error records for session ${sessionId}`);
+      return result.changes || 0;
+    } catch (error) {
+      console.error('Failed to delete error records for session:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get error records grouped by session_id for Management by Exception screen
    * Returns session_id, count of failed measurements, error message, and first error timestamp
    */
