@@ -22,6 +22,13 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
           onPress={() => navigation.navigate('Setup')}
           style={styles.startButton}
         />
+        
+        <Button
+          title="Nezpracovaná data"
+          onPress={() => navigation.navigate('SyncErrors')}
+          variant="secondary"
+          style={styles.syncErrorsButton}
+        />
       </View>
     </View>
   );
@@ -52,5 +59,10 @@ const styles = StyleSheet.create({
   startButton: {
     minWidth: 200,
     paddingVertical: 16,
+  },
+  syncErrorsButton: {
+    minWidth: 200,
+    paddingVertical: 12,
+    marginTop: 12,
   },
 });

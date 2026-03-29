@@ -6,6 +6,7 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { HomeScreen } from './screens/HomeScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { MeasurementScreen } from './screens/MeasurementScreen';
+import { SyncErrorsScreen } from './screens/SyncErrorsScreen';
 import { RootStackParamList } from './types/navigation';
 import { DatabaseService } from './services/database.service';
 import { SyncService } from './services/sync.service';
@@ -108,6 +109,7 @@ export default function App() {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Setup" component={SetupScreen} />
         <Stack.Screen name="Measurement" component={MeasurementScreen} />
+        <Stack.Screen name="SyncErrors" component={SyncErrorsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

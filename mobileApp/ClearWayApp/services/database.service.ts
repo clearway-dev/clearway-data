@@ -359,6 +359,68 @@ export class DatabaseService {
   }
 
   /**
+   * Retry error records for a specific session by resetting them to unsynced state
+   * Use this for manual retry of failed sessions from SyncErrorsScreen
+   */
+  static async retryErrorRecordsBySession(sessionId: string): Promise<number> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.runAsync(
+        'UPDATE local_measurements SET synced = 0, error_message = NULL, error_at = NULL WHERE synced = -1 AND session_id = ?',
+        [sessionId]
+      );
+      
+      console.log(`✓ Reset ${result.changes} error records for session ${sessionId} to retry`);
+      return result.changes || 0;
+    } catch (error) {
+      console.error('Failed to retry error records for session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get error records grouped by session_id for Management by Exception screen
+   * Returns session_id, count of failed measurements, error message, and first error timestamp
+   */
+  static async getErrorSessionGroups(): Promise<Array<{
+    session_id: string;
+    count: number;
+    error_message: string | null;
+    first_error_at: string | null;
+  }>> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.getAllAsync<{
+        session_id: string;
+        count: number;
+        error_message: string | null;
+        first_error_at: string | null;
+      }>(
+        `SELECT 
+          session_id,
+          COUNT(*) as count,
+          MAX(error_message) as error_message,
+          MIN(error_at) as first_error_at
+         FROM local_measurements 
+         WHERE synced = -1 
+         GROUP BY session_id
+         ORDER BY first_error_at DESC`
+      );
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to fetch error session groups:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Clear all measurements (for testing/debugging)
    */
   static async clearAll(): Promise<void> {
