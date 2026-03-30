@@ -382,6 +382,29 @@ export class DatabaseService {
   }
 
   /**
+   * Delete unsent (pending) measurements for a specific session
+   * Use this for manual deletion of queued measurements from SyncErrorsScreen
+   */
+  static async deleteUnsentRecordsBySession(sessionId: string): Promise<number> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.runAsync(
+        'DELETE FROM local_measurements WHERE synced = 0 AND session_id = ?',
+        [sessionId]
+      );
+      
+      console.log(`🗑️ Deleted ${result.changes} unsent records for session ${sessionId}`);
+      return result.changes || 0;
+    } catch (error) {
+      console.error('Failed to delete unsent records for session:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Delete error records for a specific session
    * Use this for manual deletion of permanently failed sessions from SyncErrorsScreen
    */
@@ -400,6 +423,42 @@ export class DatabaseService {
       return result.changes || 0;
     } catch (error) {
       console.error('Failed to delete error records for session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get unsent (pending) measurements grouped by session_id
+   * Returns session_id, count of pending measurements, and oldest measurement timestamp
+   */
+  static async getUnsentSessionGroups(): Promise<Array<{
+    session_id: string;
+    count: number;
+    oldest_measurement_at: string | null;
+  }>> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.getAllAsync<{
+        session_id: string;
+        count: number;
+        oldest_measurement_at: string | null;
+      }>(
+        `SELECT 
+          session_id,
+          COUNT(*) as count,
+          MIN(measured_at) as oldest_measurement_at
+         FROM local_measurements 
+         WHERE synced = 0 
+         GROUP BY session_id
+         ORDER BY oldest_measurement_at ASC`
+      );
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to fetch unsent session groups:', error);
       throw error;
     }
   }

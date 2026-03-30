@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
@@ -27,19 +27,31 @@ export interface ErrorSessionGroup {
   first_error_at: string | null;
 }
 
+export interface UnsentSessionGroup {
+  session_id: string;
+  count: number;
+  oldest_measurement_at: string | null;
+}
+
 export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
+  const [unsentGroups, setUnsentGroups] = useState<UnsentSessionGroup[]>([]);
   const [errorGroups, setErrorGroups] = useState<ErrorSessionGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [syncingSessionId, setSyncingSessionId] = useState<string | null>(null);
   const [retryingSessionId, setRetryingSessionId] = useState<string | null>(null);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
-  const loadErrorGroups = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const groups = await DatabaseService.getErrorSessionGroups();
-      setErrorGroups(groups);
+      const [unsent, errors] = await Promise.all([
+        DatabaseService.getUnsentSessionGroups(),
+        DatabaseService.getErrorSessionGroups(),
+      ]);
+      setUnsentGroups(unsent);
+      setErrorGroups(errors);
     } catch (error) {
-      console.error('Failed to load error groups:', error);
+      console.error('Failed to load data:', error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -47,13 +59,70 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    loadErrorGroups();
-  }, [loadErrorGroups]);
+    loadData();
+  }, [loadData]);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    loadErrorGroups();
-  }, [loadErrorGroups]);
+    loadData();
+  }, [loadData]);
+
+  const handleSyncNow = async (sessionId: string) => {
+    try {
+      setSyncingSessionId(sessionId);
+      
+      // Trigger immediate sync
+      await SyncService.forceSync();
+      
+      // Reload the list
+      await loadData();
+    } catch (error) {
+      console.error('Failed to sync session:', error);
+    } finally {
+      setSyncingSessionId(null);
+    }
+  };
+
+  const handleDeleteUnsent = (sessionId: string, count: number) => {
+    const sessionIdShort = sessionId.substring(0, 8);
+    
+    Alert.alert(
+      'Smazat čekající data',
+      `Opravdu chcete smazat ${count} ${count === 1 ? 'měření' : count < 5 ? 'měření' : 'měření'} čekající na odeslání z jízdy ${sessionIdShort}...?\n\nTato akce je nevratná.`,
+      [
+        {
+          text: 'Zrušit',
+          style: 'cancel',
+        },
+        {
+          text: 'Smazat',
+          style: 'destructive',
+          onPress: () => confirmDeleteUnsent(sessionId),
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteUnsent = async (sessionId: string) => {
+    try {
+      setDeletingSessionId(sessionId);
+      
+      // Delete unsent records for this session
+      const count = await DatabaseService.deleteUnsentRecordsBySession(sessionId);
+      
+      if (count > 0) {
+        console.log(`🗑️ Deleted ${count} unsent records for session ${sessionId}`);
+        
+        // Reload the list
+        await loadData();
+      }
+    } catch (error) {
+      console.error('Failed to delete unsent session:', error);
+      Alert.alert('Chyba', 'Nepodařilo se smazat data. Zkuste to znovu.');
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
 
   const handleRetry = async (sessionId: string) => {
     try {
@@ -69,7 +138,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
         await SyncService.forceSync();
         
         // Reload the list
-        await loadErrorGroups();
+        await loadData();
       }
     } catch (error) {
       console.error('Failed to retry session:', error);
@@ -109,7 +178,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
         console.log(`🗑️ Deleted ${count} error records for session ${sessionId}`);
         
         // Reload the list
-        await loadErrorGroups();
+        await loadData();
       }
     } catch (error) {
       console.error('Failed to delete session:', error);
@@ -117,6 +186,56 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
     } finally {
       setDeletingSessionId(null);
     }
+  };
+
+  const renderUnsentCard = ({ item }: { item: UnsentSessionGroup }) => {
+    const isSyncing = syncingSessionId === item.session_id;
+    const isDeleting = deletingSessionId === item.session_id;
+    const isProcessing = isSyncing || isDeleting;
+    const sessionIdShort = item.session_id.substring(0, 8);
+    const measurementDate = item.oldest_measurement_at 
+      ? new Date(item.oldest_measurement_at).toLocaleString('cs-CZ')
+      : 'Neznámé datum';
+
+    return (
+      <View style={styles.unsentCard}>
+        <View style={styles.errorHeader}>
+          <View>
+            <Text style={styles.sessionId}>Jízda {sessionIdShort}...</Text>
+            <Text style={styles.unsentDate}>{measurementDate}</Text>
+          </View>
+          <View style={styles.unsentCountBadge}>
+            <Text style={styles.unsentCountText}>{item.count}</Text>
+          </View>
+        </View>
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.syncButton, isProcessing && styles.buttonDisabled]}
+            onPress={() => handleSyncNow(item.session_id)}
+            disabled={isProcessing}
+          >
+            {isSyncing ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.syncButtonText}>Odeslat nyní</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.deleteButton, isProcessing && styles.buttonDisabled]}
+            onPress={() => handleDeleteUnsent(item.session_id, item.count)}
+            disabled={isProcessing}
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#dc2626" />
+            ) : (
+              <Text style={styles.deleteButtonText}>Smazat</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   const renderErrorCard = ({ item }: { item: ErrorSessionGroup }) => {
@@ -215,28 +334,61 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
         <Text style={styles.title}>Neodeslaná data</Text>
       </View>
 
-      {errorGroups.length === 0 ? (
+      {unsentGroups.length === 0 && errorGroups.length === 0 ? (
         <View style={styles.content}>
           {renderEmptyState()}
         </View>
       ) : (
-        <View style={styles.content}>
-          <View style={styles.infoBox}>
-            <Text style={styles.infoText}>
-              Nalezeno {errorGroups.length} {errorGroups.length === 1 ? 'problémová jízda' : 'problémové jízdy'} s chybami při odesílání
-            </Text>
-          </View>
+        <ScrollView 
+          style={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+          }
+        >
+          {/* Čekající na odeslání (synced = 0) */}
+          {unsentGroups.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>⏳ Čekající na odeslání</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Měření čekají na automatické odeslání nebo selhal server
+                </Text>
+              </View>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>
+                  Nalezeno {unsentGroups.length} {unsentGroups.length === 1 ? 'jízda' : unsentGroups.length < 5 ? 'jízdy' : 'jízd'} s čekajícími měřeními
+                </Text>
+              </View>
+              {unsentGroups.map((item) => (
+                <View key={item.session_id}>
+                  {renderUnsentCard({ item })}
+                </View>
+              ))}
+            </View>
+          )}
 
-          <FlatList
-            data={errorGroups}
-            keyExtractor={(item) => item.session_id}
-            renderItem={renderErrorCard}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
-            }
-          />
-        </View>
+          {/* Chybná data (synced = -1) */}
+          {errorGroups.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>❌ Chybná data</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Data se špatnými hodnotami (nebudou automaticky odeslána)
+                </Text>
+              </View>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>
+                  Nalezeno {errorGroups.length} {errorGroups.length === 1 ? 'problémová jízda' : errorGroups.length < 5 ? 'problémové jízdy' : 'problémových jízd'} s chybami
+                </Text>
+              </View>
+              {errorGroups.map((item) => (
+                <View key={item.session_id}>
+                  {renderErrorCard({ item })}
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
       )}
     </View>
   );
@@ -275,18 +427,81 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#18181b',
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#71717a',
+    lineHeight: 20,
+  },
   infoBox: {
     backgroundColor: '#fef3c7',
     borderLeftWidth: 4,
     borderLeftColor: '#f59e0b',
     padding: 16,
     marginHorizontal: 20,
-    marginTop: 16,
+    marginTop: 8,
+    marginBottom: 16,
     borderRadius: 8,
   },
   infoText: {
     fontSize: 14,
     color: '#92400e',
+  },
+  unsentCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  unsentDate: {
+    fontSize: 12,
+    color: '#71717a',
+  },
+  unsentCountBadge: {
+    backgroundColor: '#dbeafe',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  unsentCountText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e40af',
+  },
+  syncButton: {
+    flex: 1,
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  syncButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
   listContent: {
     padding: 20,
@@ -295,7 +510,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    marginHorizontal: 20,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#fecaca',
     shadowColor: '#000',
