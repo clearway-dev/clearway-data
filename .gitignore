@@ -1,7 +1,10 @@
 .env
 
 db_schema.sql
-
+csvTojson.py
+dataset_part1.json
+dataset_part2.json
+dataset.csv
 test_validation.ps1
 test_batch.ps1
 

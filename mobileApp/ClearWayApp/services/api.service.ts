@@ -1,6 +1,6 @@
 import { MeasurementBatch, Vehicle, Sensor, Session } from '../types';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://db-mobile.clearway.zephyron.tech';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
 const API_PREFIX = '/api';
 
 /**
