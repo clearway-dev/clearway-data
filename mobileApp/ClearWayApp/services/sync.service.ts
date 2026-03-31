@@ -166,20 +166,17 @@ export class SyncService {
           message: `Dávka odeslána. Zbývá ${remainingStats.unsynced} měření...`,
           timestamp: Date.now()
         });
-      } else if (remainingStats.errors > 0) {
-        console.log(`⚠️ All valid measurements synced. ${remainingStats.errors} error records (poison pills) remain.`);
-        this.emitStatus({ 
-          status: 'success', 
-          message: `Synchronizováno. ${remainingStats.errors} chybných záznamů.`,
-          timestamp: Date.now()
-        });
-      } else {
+      } else if (totalSynced > 0 || totalPoisonPills > 0) {
+        // Only show completion message if something was actually processed in this cycle
         console.log('✓ All measurements synced');
         this.emitStatus({ 
           status: 'success', 
-          message: 'Vše synchronizováno',
+          message: `Odesláno ${totalSynced} měření`,
           timestamp: Date.now()
         });
+      } else {
+        // Nothing to sync, just go idle (don't spam about old errors)
+        this.emitStatus({ status: 'idle' });
       }
       
     } catch (error) {
