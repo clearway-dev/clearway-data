@@ -1,205 +1,270 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, AppState, AppStateStatus } from 'react-native';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { ApiService } from '../services/api.service';
-import { DatabaseService } from '../services/database.service';
+import { BackendStatusBar } from '../components/BackendStatusBar';
 import { useMeasurement } from '../hooks/useMeasurement';
 import { useSync } from '../hooks/useSync';
-import { Vehicle, Sensor } from '../types';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RouteProp } from '@react-navigation/native';
+import { RootStackParamList } from '../types/navigation';
 
-export const MeasurementScreen: React.FC = () => {
-  // State
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [sensors, setSensors] = useState<Sensor[]>([]);
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
-  const [selectedSensorId, setSelectedSensorId] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+type MeasurementScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Measurement'>;
+type MeasurementScreenRouteProp = RouteProp<RootStackParamList, 'Measurement'>;
+
+interface Props {
+  navigation: MeasurementScreenNavigationProp;
+  route: MeasurementScreenRouteProp;
+}
+
+export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { sessionId } = route.params;
+  const [isPaused, setIsPaused] = useState(false);
+  const [systemPaused, setSystemPaused] = useState(false); // Flag pro systémovou pauzu
+  const appState = useRef(AppState.currentState);
 
   // Hooks
-  const { isRecording, measurementCount, currentLocation, locationError, permissionGranted, startRecording, stopRecording } = useMeasurement(sessionId);
+  const { 
+    isRecording, 
+    measurementCount, 
+    currentLocation, 
+    locationError, 
+    permissionGranted,
+    lastMeasurement,
+    startRecording, 
+    stopRecording 
+  } = useMeasurement(sessionId);
+  
   const { stats, forceSync } = useSync(isRecording);
 
-  // Initialize database and load data
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        // Initialize SQLite
-        await DatabaseService.initialize();
-        
-        // Load vehicles and sensors
-        const [vehiclesData, sensorsData] = await Promise.all([
-          ApiService.getVehicles(),
-          ApiService.getSensors(),
-        ]);
-        
-        setVehicles(vehiclesData);
-        setSensors(sensorsData);
-        
-        // Auto-select first vehicle and sensor
-        if (vehiclesData.length > 0) {
-          setSelectedVehicleId(vehiclesData[0].id);
-        }
-        if (sensorsData.length > 0) {
-          setSelectedSensorId(sensorsData[0].id);
-        }
-        
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('Initialization failed:', error);
-        setIsInitialized(true); // Show UI even on error
-        Alert.alert('Chyba', 'Nepodařilo se inicializovat aplikaci. Zkontrolujte internetové připojení.');
-      }
-    };
-
-    initialize();
-  }, []);
-
-  // Create session
-  const handleCreateSession = async () => {
-    if (!selectedVehicleId || !selectedSensorId) {
-      Alert.alert('Chyba', 'Vyberte vozidlo a senzor');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const session = await ApiService.createSession(selectedVehicleId, selectedSensorId);
-      setSessionId(session.id);
-      Alert.alert('Úspěch', 'Nová jízda byla vytvořena');
-    } catch (error) {
-      Alert.alert('Chyba', 'Nepodařilo se vytvořit jízdu');
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Start/stop recording
-  const handleToggleRecording = () => {
-    if (isRecording) {
-      stopRecording();
+  // Keep screen awake when recording
+  React.useEffect(() => {
+    if (isRecording && !isPaused) {
+      activateKeepAwakeAsync();
     } else {
-      if (!sessionId) {
-        Alert.alert('Chyba', 'Nejprve vytvořte novou jízdu');
-        return;
+      deactivateKeepAwake();
+    }
+
+    return () => {
+      deactivateKeepAwake();
+    };
+  }, [isRecording, isPaused]);
+
+  // Handle app going to background (incoming call, app switch, etc.)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      console.log('AppState changed:', appState.current, '->', nextAppState);
+      
+      // Aplikace přechází do pozadí BĚHEM aktivního měření
+      if (
+        appState.current === 'active' &&
+        (nextAppState === 'background' || nextAppState === 'inactive') &&
+        isRecording &&
+        !isPaused
+      ) {
+        console.warn('⚠️ App going to background during active measurement - auto-pausing');
+        stopRecording();
+        setIsPaused(true);
+        setSystemPaused(true); // Označit, že pauza byla systémová
       }
-      if (!permissionGranted) {
-        Alert.alert('Chyba', 'Aplikace nemá oprávnění k poloze');
-        return;
+      
+      // Aplikace se vrací do popředí
+      if (
+        (appState.current === 'background' || appState.current === 'inactive') &&
+        nextAppState === 'active' &&
+        systemPaused
+      ) {
+        console.log('✓ App returned to foreground - measurement paused by system');
+        // Uživatel se vrátil - zobrazíme alert, že měření bylo pozastaveno
+        Alert.alert(
+          'Měření pozastaveno',
+          'Měření bylo automaticky pozastaveno při odchodu aplikace na pozadí. Spusťte měření znovu tlačítkem "Pokračovat".',
+          [{ text: 'OK' }]
+        );
+        setSystemPaused(false); // Reset flagu
       }
+
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isRecording, isPaused, systemPaused, stopRecording]);
+
+  // Auto-start recording when screen loads
+  React.useEffect(() => {
+    if (permissionGranted && !isRecording) {
       startRecording();
     }
+  }, [permissionGranted]);
+
+  const handleTogglePause = () => {
+    if (isPaused) {
+      // Resume
+      startRecording();
+      setIsPaused(false);
+    } else {
+      // Pause
+      stopRecording();
+      setIsPaused(true);
+    }
   };
 
-  if (!isInitialized) {
+  const handleClose = () => {
+    if (isRecording || isPaused) {
+      Alert.alert(
+        'Ukončit měření?',
+        'Opravdu chcete ukončit měření? Všechna neodeslaná data budou synchronizována na server.',
+        [
+          { text: 'Zrušit', style: 'cancel' },
+          {
+            text: 'Ukončit',
+            style: 'destructive',
+            onPress: () => {
+              stopRecording();
+              navigation.navigate('Setup');
+            },
+          },
+        ]
+      );
+    } else {
+      navigation.navigate('Setup');
+    }
+  };
+
+  // Calculate street width from last measurement (distance_left + distance_right + vehicle_width)
+  // For now, assume vehicle width is ~180cm (will be from vehicle data later)
+  const getStreetWidth = () => {
+    if (!lastMeasurement) return null;
+    // Convert cm to meters for display
+    const widthCm = lastMeasurement.distance_left + lastMeasurement.distance_right + 180;
+    return widthCm / 100;
+  };
+
+  const getWidthColor = (widthM: number | null) => {
+    if (widthM === null) return '#71717a';
+    if (widthM > 3.5) return '#22c55e'; // Green
+    if (widthM >= 3.0) return '#eab308'; // Yellow
+    return '#ef4444'; // Red
+  };
+
+  const streetWidth = getStreetWidth();
+  const widthColor = getWidthColor(streetWidth);
+
+  if (!permissionGranted) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" />
-        <Text>Inicializace...</Text>
+        <Text style={styles.errorText}>Aplikace nemá oprávnění k poloze</Text>
+        <Button title="Zavřít" onPress={handleClose} variant="secondary" />
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>ClearWay Měření</Text>
+    <View style={styles.container}>
+      <BackendStatusBar />
+      
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        {/* Close Button */}
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+          <Text style={styles.closeButtonText}>✕</Text>
+        </TouchableOpacity>
 
-      {/* Vehicle Selection */}
-      <Card style={styles.card}>
-        <Text style={styles.label}>Vozidlo:</Text>
-        <Picker
-          selectedValue={selectedVehicleId}
-          onValueChange={(value) => setSelectedVehicleId(value)}
-          enabled={!isRecording}
-        >
-          {vehicles.map(v => (
-            <Picker.Item key={v.id} label={`${v.vehicle_name} (${v.width}cm)`} value={v.id} />
-          ))}
-        </Picker>
-      </Card>
+        <Text style={styles.title}>Měření</Text>
 
-      {/* Sensor Selection */}
-      <Card style={styles.card}>
-        <Text style={styles.label}>Senzor:</Text>
-        <Picker
-          selectedValue={selectedSensorId}
-          onValueChange={(value) => setSelectedSensorId(value)}
-          enabled={!isRecording}
-        >
-          {sensors.map(s => (
-            <Picker.Item key={s.id} label={s.description || `Senzor ${s.id}`} value={s.id} />
-          ))}
-        </Picker>
-      </Card>
+        {/* Current Width Display */}
+        <Card style={[styles.card, styles.widthCard]}>
+          <Text style={styles.widthLabel}>Aktuální šířka:</Text>
+          {streetWidth !== null ? (
+            <View style={styles.widthDisplay}>
+              <Text style={[styles.widthValue, { color: widthColor }]}>
+                {streetWidth.toFixed(2)} m
+              </Text>
+              <View style={[styles.widthIndicator, { backgroundColor: widthColor }]} />
+            </View>
+          ) : (
+            <Text style={styles.widthValue}>--</Text>
+          )}
+          
+          {lastMeasurement && (
+            <View style={styles.distanceDetails}>
+              <Text style={styles.distanceText}>
+                Levá: {(lastMeasurement.distance_left / 100).toFixed(2)}m
+              </Text>
+              <Text style={styles.distanceText}>
+                Pravá: {(lastMeasurement.distance_right / 100).toFixed(2)}m
+              </Text>
+            </View>
+          )}
+        </Card>
 
-      {/* Session Control */}
-      {!sessionId && (
+        {/* Status */}
+        <Card style={styles.card}>
+          <Text style={styles.label}>
+            Status: {isRecording ? '🔴 Nahrávání...' : isPaused ? '⏸ Pozastaveno' : 'Připraveno'}
+          </Text>
+          <Text style={styles.value}>Měření: {measurementCount}</Text>
+        </Card>
+
+        {/* Location Info */}
+        {locationError && (
+          <Card style={[styles.card, styles.errorCard]}>
+            <Text style={styles.errorText}>{locationError}</Text>
+          </Card>
+        )}
+
+        {currentLocation && (
+          <Card style={styles.card}>
+            <Text style={styles.label}>GPS pozice:</Text>
+            <Text style={styles.value}>Lat: {currentLocation.latitude.toFixed(6)}°</Text>
+            <Text style={styles.value}>Lon: {currentLocation.longitude.toFixed(6)}°</Text>
+            {currentLocation.accuracy && (
+              <Text style={styles.value}>Přesnost: {currentLocation.accuracy.toFixed(1)}m</Text>
+            )}
+          </Card>
+        )}
+
+        {/* Controls */}
         <Button
-          title="Vytvořit novou jízdu"
-          onPress={handleCreateSession}
-          loading={isLoading}
-          disabled={isLoading || !selectedVehicleId || !selectedSensorId}
+          title={isPaused ? 'Pokračovat' : 'Stop'}
+          onPress={handleTogglePause}
+          variant={isPaused ? 'primary' : 'secondary'}
+          style={styles.controlButton}
         />
-      )}
 
-      {sessionId && (
-        <>
-          <Card style={styles.card}>
-            <Text style={styles.label}>Session ID:</Text>
-            <Text style={styles.value}>{sessionId}</Text>
-          </Card>
-
-          {/* Recording Control */}
+        {/* Database Stats */}
+        <Card style={styles.card}>
+          <Text style={styles.label}>Lokální databáze:</Text>
+          <Text style={styles.value}>Celkem: {stats.total} měření</Text>
+          <Text style={styles.value}>Neodesláno: {stats.unsynced} měření</Text>
           <Button
-            title={isRecording ? 'STOP' : 'START'}
-            onPress={handleToggleRecording}
-            variant={isRecording ? 'secondary' : 'primary'}
-            disabled={!permissionGranted}
+            title="Odeslat nyní"
+            onPress={forceSync}
+            variant="secondary"
+            style={styles.syncButton}
           />
+        </Card>
 
-          {/* Location Error */}
-          {locationError && (
-            <Card style={[styles.card, styles.errorCard]}>
-              <Text style={styles.errorText}>{locationError}</Text>
-            </Card>
-          )}
-
-          {/* Current Status */}
-          {isRecording && (
-            <Card style={styles.card}>
-              <Text style={styles.label}>Status: Nahrávání...</Text>
-              <Text style={styles.value}>Měření: {measurementCount}</Text>
-              {currentLocation && (
-                <>
-                  <Text style={styles.value}>Lat: {currentLocation.latitude.toFixed(6)}°</Text>
-                  <Text style={styles.value}>Lon: {currentLocation.longitude.toFixed(6)}°</Text>
-                  {currentLocation.accuracy && (
-                    <Text style={styles.value}>Přesnost: {currentLocation.accuracy.toFixed(1)}m</Text>
-                  )}
-                </>
-              )}
-            </Card>
-          )}
-
-          {/* Database Stats */}
-          <Card style={styles.card}>
-            <Text style={styles.label}>Lokální databáze:</Text>
-            <Text style={styles.value}>Celkem: {stats.total} měření</Text>
-            <Text style={styles.value}>Neodesláno: {stats.unsynced} měření</Text>
-            <Button
-              title="Odeslat nyní"
-              onPress={forceSync}
-              variant="secondary"
-              style={styles.syncButton}
-            />
-          </Card>
-        </>
-      )}
-    </ScrollView>
+        {/* Color Legend */}
+        <Card style={styles.card}>
+          <Text style={styles.label}>Legenda barev:</Text>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#22c55e' }]} />
+            <Text style={styles.legendText}>&gt; 3.5m - Zelená</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#eab308' }]} />
+            <Text style={styles.legendText}>3.0 - 3.5m - Žlutá</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
+            <Text style={styles.legendText}>&lt; 3.0m - Červená</Text>
+          </View>
+        </Card>
+      </ScrollView>
+    </View>
   );
 };
 
@@ -208,17 +273,72 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fafafa',
   },
+  scrollView: {
+    flex: 1,
+  },
   content: {
     padding: 20,
     paddingTop: 60,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e4e4e7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  closeButtonText: {
+    fontSize: 24,
+    color: '#18181b',
+    fontWeight: '300',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 24,
+    color: '#18181b',
   },
   card: {
     marginBottom: 16,
+  },
+  widthCard: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#e4e4e7',
+  },
+  widthLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#71717a',
+    marginBottom: 12,
+  },
+  widthDisplay: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  widthValue: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  widthIndicator: {
+    width: '100%',
+    height: 8,
+    borderRadius: 4,
+  },
+  distanceDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 8,
+  },
+  distanceText: {
+    fontSize: 14,
+    color: '#71717a',
   },
   label: {
     fontSize: 14,
@@ -237,8 +357,28 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#dc2626',
+    fontSize: 14,
+  },
+  controlButton: {
+    marginVertical: 8,
+    paddingVertical: 16,
   },
   syncButton: {
     marginTop: 12,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  legendDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  legendText: {
+    fontSize: 14,
+    color: '#18181b',
   },
 });

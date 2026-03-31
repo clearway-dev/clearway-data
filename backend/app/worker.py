@@ -25,6 +25,15 @@ from sqlalchemy.orm import Session
 from . import models
 from .database import SessionLocal
 
+
+class BatchNotFoundError(Exception):
+    """Custom exception raised when batch is not found in database.
+    
+    This exception is used to trigger automatic retries in Celery tasks,
+    handling race conditions between database commit and task execution.
+    """
+    pass
+
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://clearway-redis:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://clearway-redis:6379/0")
 
@@ -187,46 +196,84 @@ def _apply_width_median_filter(widths: list[float], window: int = WIDTH_MEDIAN_W
 # Celery task
 # --------------------------------------------------------------------------- #
 
-@celery_app.task(name="process_batch_task")
-def process_batch_task(measurement_ids: list[int]) -> dict:
+@celery_app.task(
+    name="process_batch_task",
+    bind=True,
+    autoretry_for=(BatchNotFoundError,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=5,
+    default_retry_delay=10,
+)
+def process_batch_task(self, batch_id: str) -> dict:
     """
     Full async processing pipeline for a batch of raw measurements.
+    
+    NEW: Receives batch_id (UUID as string) instead of array of measurement IDs.
+    Updates batch status throughout processing: pending -> processing -> completed/failed.
 
-    1. Load RawMeasurement rows joined with Session -> Vehicle (to get vehicle.width).
-    2. Phase 1 - logical validation -> mark invalids, bulk-insert invalid_measurements.
-    3. Phase 2 - map-match each valid point -> compute cleaned_width,
-       bulk-insert cleaned_measurements.
-    4. Single db.commit() covering all changes.
+    1. Load Batch record and update status to 'processing'
+    2. Load RawMeasurement rows via batch_id, joined with Session -> Vehicle
+    3. Phase 1 - logical validation -> mark invalids, bulk-insert invalid_measurements
+    4. Phase 2 - map-match each valid point -> compute cleaned_width,
+       bulk-insert cleaned_measurements
+    5. Update batch status to 'completed' or 'failed'
+    6. Single db.commit() covering all changes
+    
+    Retry configuration:
+    - Automatically retries on BatchNotFoundError (race condition handling)
+    - Max retries: 5
+    - Initial retry delay: 10 seconds
+    - Uses exponential backoff with jitter to prevent thundering herd
+    - Max backoff: 600 seconds (10 minutes)
     """
     db: Session = SessionLocal()
     try:
-        if not measurement_ids:
-            return {
-                "processed": 0,
-                "invalid": 0,
-                "cleaned": 0,
-                "message": "No measurement IDs received",
-            }
+        import uuid
+        batch_uuid = uuid.UUID(batch_id)
+        
+        # ------------------------------------------------------------------ #
+        # LOAD BATCH and update status to 'processing'
+        # ------------------------------------------------------------------ #
+        batch: models.Batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+        
+        if not batch:
+            logger.warning(
+                f"Batch {batch_id} not found in database - will retry "
+                f"(attempt {self.request.retries + 1}/{self.max_retries})"
+            )
+            # Raise custom exception to trigger automatic retry
+            raise BatchNotFoundError(
+                f"Batch {batch_id} not found in database. "
+                f"This may be a race condition - task will retry."
+            )
+        
+        # Update batch status to 'processing'
+        batch.status = 'processing'
+        db.flush()
+        
+        logger.info(f"process_batch_task started for batch_id={batch_id}")
 
         # ------------------------------------------------------------------ #
         # LOAD - measurements with session + vehicle eagerly joined
         # ------------------------------------------------------------------ #
         measurements: list[models.RawMeasurement] = (
             db.query(models.RawMeasurement)
-            .join(models.RawMeasurement.session)
+            .join(models.RawMeasurement.batch)
+            .join(models.Batch.session)
             .join(models.Session.vehicle)
-            .filter(models.RawMeasurement.id.in_(measurement_ids))
+            .filter(models.RawMeasurement.batch_id == batch_uuid)
             .order_by(models.RawMeasurement.measured_at.asc(), models.RawMeasurement.id.asc())
             .all()
         )
 
         logger.info(
-            "process_batch_task started - requested_ids={} loaded_measurements={}",
-            len(measurement_ids),
-            len(measurements),
+            f"Batch {batch_id}: loaded {len(measurements)} measurements"
         )
 
         # Pre-load existing invalid IDs to avoid duplicate entries on retry.
+        measurement_ids = [m.id for m in measurements]
         existing_invalid_ids: set[int] = {
             row.raw_measurement_id
             for row in db.query(models.InvalidMeasurement.raw_measurement_id)
@@ -319,7 +366,7 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
         matched_points: list[dict] = []
 
         for m in valid_measurements:
-            vehicle_width: float = m.session.vehicle.width
+            vehicle_width: float = m.batch.session.vehicle.width
 
             snapped = _map_match(db, m.latitude, m.longitude)
             if snapped is None:
@@ -400,27 +447,46 @@ def process_batch_task(measurement_ids: list[int]) -> dict:
         if invalid_records:
             db.bulk_save_objects(invalid_records)
 
+        # Update batch status to 'completed'
+        batch.status = 'completed'
+        
         # Single transaction covering all phases
         db.commit()
 
         logger.info(
-            "process_batch_task done - processed={} invalid={} cleaned={} unmatched={}",
-            len(measurements),
-            invalid_count,
-            len(cleaned_records),
-            unmatched_count,
+            f"Batch {batch_id} completed - processed={len(measurements)} invalid={invalid_count} "
+            f"cleaned={len(cleaned_records)} unmatched={unmatched_count}"
         )
 
         return {
+            "batch_id": batch_id,
+            "status": "completed",
             "processed": len(measurements),
             "invalid": invalid_count,
             "cleaned": len(cleaned_records),
             "unmatched": unmatched_count,
-            "message": "Batch processing completed",
+            "message": "Batch processing completed successfully",
         }
-    except Exception:
+    except BatchNotFoundError:
+        # Let Celery handle the retry automatically
         db.rollback()
-        logger.exception("Unhandled error in process_batch_task")
+        db.close()
+        raise
+    except Exception as e:
+        # Update batch status to 'failed' on error
+        batch: models.Batch | None = None
+        try:
+            if 'batch_uuid' in locals():
+                batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+            if batch:
+                batch.status = 'failed'
+                db.commit()
+                logger.error(f"Batch {batch_id} failed: {str(e)}")
+        except Exception as commit_error:
+            logger.error(f"Failed to update batch status to 'failed': {str(commit_error)}")
+        
+        db.rollback()
+        logger.exception(f"Unhandled error in process_batch_task for batch {batch_id}")
         raise
     finally:
         db.close()

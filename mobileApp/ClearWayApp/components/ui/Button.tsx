@@ -18,7 +18,15 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   style,
 }) => {
-  const isDisabled = disabled || loading;
+  const normalizeBoolean = (value: unknown): boolean => {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return Boolean(value);
+  };
+
+  const isLoading = normalizeBoolean(loading);
+  const isDisabled = normalizeBoolean(disabled) || isLoading;
   
   return (
     <TouchableOpacity
@@ -32,7 +40,7 @@ export const Button: React.FC<ButtonProps> = ({
       disabled={isDisabled}
       activeOpacity={0.8}
     >
-      {loading ? (
+      {isLoading ? (
         <ActivityIndicator color={variant === 'primary' ? '#ffffff' : '#18181b'} />
       ) : (
         <Text

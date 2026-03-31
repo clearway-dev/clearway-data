@@ -1,0 +1,38 @@
+name: Build Mobile App (APK)
+
+on:
+  # Spustí se automaticky při pushi do větve main
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'mobileApp/ClearWayApp/**'  # Spustí se JEN když upravíš něco ve složce "mobile"
+  # Přidá tlačítko v GitHub Actions pro ruční spuštění kdykoliv chceš
+  workflow_dispatch: 
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout repozitáře
+        uses: actions/checkout@v4
+
+      - name: 🟢 Nastavení Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x # Změň, pokud používáš novější (např. 20.x)
+
+      - name: 🛠️ Nastavení Expo a EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 📦 Instalace závislostí
+        # Změň cestu k adresáři podle toho, kde máš složku s mobilní aplikací (např. ./mobile)
+        working-directory: ./mobileApp/ClearWayApp
+        run: npm install
+
+      - name: 🚀 Build APK přes EAS
+        working-directory: ./mobileApp/ClearWayApp
+        # Vlajka --non-interactive je klíčová, aby to na serveru nečekalo na potvrzení klávesou
+        run: eas build --platform android --profile preview --non-interactive

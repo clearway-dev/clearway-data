@@ -50,7 +50,22 @@ class Session(Base):
     # Relationships
     sensor = relationship("Sensor", back_populates="sessions")
     vehicle = relationship("Vehicle", back_populates="sessions")
-    raw_measurements = relationship("RawMeasurement", back_populates="session")
+    batches = relationship("Batch", back_populates="session")
+
+
+class Batch(Base):
+    """Batch uploads from mobile app containing multiple measurements"""
+    __tablename__ = "batches"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v4()"))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'pending'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp())
+
+    # Relationships
+    session = relationship("Session", back_populates="batches")
+    raw_measurements = relationship("RawMeasurement", back_populates="batch")
 
 
 class RawMeasurement(Base):
@@ -58,7 +73,7 @@ class RawMeasurement(Base):
     __tablename__ = "raw_measurements"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    batch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("batches.id", ondelete="CASCADE"), nullable=False)
     measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
     latitude: Mapped[float] = mapped_column(Double, nullable=False)
     longitude: Mapped[float] = mapped_column(Double, nullable=False)
@@ -70,7 +85,7 @@ class RawMeasurement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp())
 
     # Relationships
-    session = relationship("Session", back_populates="raw_measurements")
+    batch = relationship("Batch", back_populates="raw_measurements")
     cleaned_measurement = relationship("CleanedMeasurement", back_populates="raw_measurement", uselist=False)
     invalid_measurement = relationship("InvalidMeasurement", back_populates="raw_measurement", uselist=False)
 

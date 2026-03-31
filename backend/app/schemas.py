@@ -228,6 +228,7 @@ class BatchMeasurementResponse(BaseModel):
     """Response for batch measurement upload"""
     success: bool = Field(..., description="Overall success status")
     message: str = Field(..., description="Summary message")
+    batch_id: UUID = Field(..., description="UUID of the created batch")
     total_received: int = Field(..., description="Total measurements received")
     total_stored: int = Field(..., description="Total measurements successfully stored")
     total_invalid: int = Field(..., description="Total measurements marked as invalid")

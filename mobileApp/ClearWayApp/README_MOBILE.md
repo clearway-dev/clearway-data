@@ -10,11 +10,15 @@ npm install
 ## 🔧 Konfigurace
 
 ### Backend URL
-Aktualizujte API URL v souboru `services/api.service.ts`:
+Vytvořte soubor `.env` ve složce mobilní aplikace (`mobileApp/ClearWayApp/.env`).
+Můžete začít z šablony `.env.example` a zkopírovat ji na `.env`, pak nastavte:
 
-```typescript
-const API_BASE_URL = 'http://YOUR_IP:8000/api';
+```env
+EXPO_PUBLIC_API_URL=https://api-mobile.clearway.zephyron.tech
 ```
+
+Proměnná `EXPO_PUBLIC_API_URL` se načítá automaticky v Expo a používá se pro všechny API volání.
+Po změně `.env` restartujte Expo server (`npm start` znovu), aby se nová hodnota načetla.
 
 Zjistit IP adresu vašeho počítače:
 - **Windows**: `ipconfig` → IPv4 Address
@@ -99,7 +103,7 @@ Logování:
 
 ### "Network request failed"
 - ✅ Zkontrolujte že backend běží (`docker ps`)
-- ✅ Zkontrolujte IP adresu v `api.service.ts`
+- ✅ Zkontrolujte `EXPO_PUBLIC_API_URL` v `.env`
 - ✅ Ujistěte se, že mobilní zařízení je na stejné WiFi síti
 
 ### "Database not initialized"

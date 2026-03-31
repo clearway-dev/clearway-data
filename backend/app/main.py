@@ -20,7 +20,7 @@ logger.remove()
 logger.add(
     "/app/logs/fastapi.log",
     rotation="10 MB",
-    retention="7 days",
+    retention="14 days",
     level="INFO",
 )
 
@@ -259,78 +259,6 @@ def create_session(session: schemas.SessionCreate, db: Session = Depends(get_db)
 measurements_router = APIRouter(prefix="/api/measurements", tags=["measurements"])
 
 
-@measurements_router.post("/raw", response_model=schemas.SuccessResponse, status_code=status.HTTP_201_CREATED)
-def ingest_raw_measurement(payload: schemas.RawMeasurementCreateLax, db: Session = Depends(get_db)):
-    """
-    Ingest raw measurement data from mobile app.
-    
-    This endpoint:
-    1. Accepts structurally valid payload (Pydantic handles 422 for bad structure)
-    2. Stores data into raw_measurements
-    3. Queues async post-processing task in Celery
-    
-    Future: Will trigger async processing via Celery
-    """
-    try:
-        # Verify session exists
-        db_session = db.query(models.Session).filter(models.Session.id == payload.session_id).first()
-        if not db_session:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session with ID {payload.session_id} not found"
-            )
-        
-        try:
-            new_measurement = models.RawMeasurement(
-                session_id=payload.session_id,
-                measured_at=payload.measured_at,
-                latitude=payload.latitude,
-                longitude=payload.longitude,
-                distance_left=payload.distance_left,
-                distance_right=payload.distance_right,
-                speed=payload.speed,
-                accuracy_gps=payload.accuracy_gps,
-                is_valid=True
-            )
-            
-            db.add(new_measurement)
-            db.flush()
-
-            process_batch_task.delay([new_measurement.id])
-
-            db.commit()
-            db.refresh(new_measurement)
-
-            logger.info(f"Stored measurement {new_measurement.id} for session {payload.session_id} and queued async task")
-            
-            return schemas.SuccessResponse(
-                success=True,
-                message="Measurement received, stored, and queued for async processing",
-                data={
-                    "measurement_id": new_measurement.id,
-                    "queued": True
-                }
-            )
-            
-        except IntegrityError as ie:
-            db.rollback()
-            logger.error(f"DB constraint violation for session {payload.session_id}: {str(ie)}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Database constraint violation: {str(ie)}"
-            )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error ingesting measurement: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to ingest measurement: {str(e)}"
-        )
-
-
 @measurements_router.get("/recent", response_model=List[schemas.RawMeasurementResponse])
 def get_recent_measurements(limit: int = 100, db: Session = Depends(get_db)):
     """
@@ -361,12 +289,16 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreate, db: Sessi
     
     This endpoint:
     1. Validates session existence
-    2. Stores incoming measurements using bulk insert (db.add_all())
-    3. Calls db.flush() to retrieve generated BIGSERIAL IDs
-    4. Enqueues Celery task process_batch_task with inserted IDs
-    5. Commits transaction and returns summary
+    2. Creates a new batch record with status='pending'
+    3. Stores incoming measurements using bulk insert (db.add_all()) with batch_id FK
+    4. Commits transaction FIRST
+    5. Enqueues Celery task process_batch_task AFTER successful commit
     
     Performance: Can handle up to 10,000 measurements per request.
+    
+    RACE CONDITION FIX:
+    - Celery task is triggered ONLY after db.commit() succeeds
+    - Task will retry automatically if batch is not found (handles Redis faster than Postgres)
     
     Args:
         payload: BatchMeasurementCreate containing session_id and list of measurements
@@ -375,8 +307,10 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreate, db: Sessi
     Returns:
         BatchMeasurementResponse with statistics about processed measurements
     """
+    batch_id = None  # Initialize for exception handling
+    
     try:
-        # Verify session exists
+        # 1. Verify session exists
         db_session = db.query(models.Session).filter(models.Session.id == payload.session_id).first()
         if not db_session:
             raise HTTPException(
@@ -387,18 +321,28 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreate, db: Sessi
         total_received = len(payload.measurements)
         total_stored = 0
         
-        # Prepare list for bulk insert
-        measurements_to_insert = []
-        inserted_ids = []
-        
         logger.info(f"Processing batch of {total_received} measurements for session {payload.session_id}")
         
-        # Process each measurement
+        # 2. Create new batch record with status='pending'
+        new_batch = models.Batch(
+            session_id=payload.session_id,
+            status='pending'
+        )
+        
+        db.add(new_batch)
+        db.flush()  # Get the generated batch UUID
+        
+        batch_id = new_batch.id
+        logger.info(f"Created batch {batch_id} for session {payload.session_id}")
+        
+        # 3. Prepare measurements with batch_id FK
+        measurements_to_insert = []
+        
         for measurement in payload.measurements:
             # Structural validation is handled by Pydantic schema.
             # Business/logical validation is delegated to Celery pipeline.
             new_measurement = models.RawMeasurement(
-                session_id=payload.session_id,
+                batch_id=batch_id,
                 measured_at=measurement.measured_at,
                 latitude=measurement.latitude,
                 longitude=measurement.longitude,
@@ -411,23 +355,116 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreate, db: Sessi
             
             measurements_to_insert.append(new_measurement)
         
-        # Perform BULK INSERT (efficient!)
+        # 4. Perform BULK INSERT (efficient!)
         if measurements_to_insert:
             try:
                 db.add_all(measurements_to_insert)
-                db.flush()  # Flush to get IDs without committing
-
-                inserted_ids = [measurement.id for measurement in measurements_to_insert if measurement.id is not None]
+                db.flush()  # Flush to assign IDs
                 
                 total_stored = len(measurements_to_insert)
 
-                process_batch_task.delay(inserted_ids)
+                # CRITICAL: Commit FIRST, then queue task
+                db.commit()
+                
+                logger.info(
+                    f"Batch {batch_id}: {total_stored} measurements committed to database"
+                )
+                
+                # 5. Queue task AFTER successful commit - prevents race condition
+                try:
+                    process_batch_task.delay(str(batch_id))
+                    logger.info(
+                        f"Batch {batch_id}: Celery task queued for async processing"
+                    )
+                except Exception as celery_error:
+                    # Log error but don't fail the request - data is already saved
+                    logger.error(
+                        f"Failed to queue Celery task for batch {batch_id}: {str(celery_error)}. "
+                        f"Data is saved but processing will not happen automatically."
+                    )
+                
+            except IntegrityError as ie:
+                db.rollback()
+                logger.error(f"Bulk insert failed - likely foreign key violation: {str(ie)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Database constraint violation - check that session_id exists: {str(ie)}"
+                )
+        
+        return schemas.BatchMeasurementResponse(
+            success=True,
+            message=f"Batch {batch_id} created: {total_stored}/{total_received} measurements stored",
+            batch_id=batch_id,
+            total_received=total_received,
+            total_stored=total_stored,
+            total_invalid=0,
+            total_rejected=0,
+            invalid_indices=[],
+            rejected_indices=[]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error processing batch: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process batch: {str(e)}"
+        )
+        
+        total_received = len(payload.measurements)
+        total_stored = 0
+        
+        logger.info(f"Processing batch of {total_received} measurements for session {payload.session_id}")
+        
+        # 2. Create new batch record with status='pending'
+        new_batch = models.Batch(
+            session_id=payload.session_id,
+            status='pending'
+        )
+        
+        db.add(new_batch)
+        db.flush()  # Get the generated batch UUID
+        
+        batch_id = new_batch.id
+        logger.info(f"Created batch {batch_id} for session {payload.session_id}")
+        
+        # 3. Prepare measurements with batch_id FK
+        measurements_to_insert = []
+        
+        for measurement in payload.measurements:
+            # Structural validation is handled by Pydantic schema.
+            # Business/logical validation is delegated to Celery pipeline.
+            new_measurement = models.RawMeasurement(
+                batch_id=batch_id,  # NEW: Use batch_id instead of session_id
+                measured_at=measurement.measured_at,
+                latitude=measurement.latitude,
+                longitude=measurement.longitude,
+                distance_left=measurement.distance_left,
+                distance_right=measurement.distance_right,
+                speed=measurement.speed,
+                accuracy_gps=measurement.accuracy_gps,
+                is_valid=True
+            )
+            
+            measurements_to_insert.append(new_measurement)
+        
+        # 4. Perform BULK INSERT (efficient!)
+        if measurements_to_insert:
+            try:
+                db.add_all(measurements_to_insert)
+                db.flush()  # Flush to assign IDs
+                
+                total_stored = len(measurements_to_insert)
+
+                # 5. NEW: Queue task with ONLY batch_id (not measurement IDs array!)
+                process_batch_task.delay(str(batch_id))
                 
                 db.commit()
                 
                 logger.info(
-                    f"Batch processed: {total_stored} stored and queued for async processing "
-                    f"for session {payload.session_id}"
+                    f"Batch {batch_id}: {total_stored} measurements stored and queued for async processing"
                 )
                 
             except IntegrityError as ie:
@@ -440,7 +477,8 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreate, db: Sessi
         
         return schemas.BatchMeasurementResponse(
             success=True,
-            message=f"Batch processed: {total_stored}/{total_received} measurements stored",
+            message=f"Batch {batch_id} created: {total_stored}/{total_received} measurements stored",
+            batch_id=batch_id,
             total_received=total_received,
             total_stored=total_stored,
             total_invalid=0,
