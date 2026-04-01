@@ -8,6 +8,7 @@ export type RootStackParamList = {
     sensorId: string;
   };
   SyncErrors: undefined;
+  Admin: undefined;
 };
 
 // Re-export types from index.ts for convenience

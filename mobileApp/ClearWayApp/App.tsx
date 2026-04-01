@@ -8,6 +8,7 @@ import { SetupScreen } from './screens/SetupScreen';
 import { MeasurementScreen } from './screens/MeasurementScreen';
 import { SyncErrorsScreen } from './screens/SyncErrorsScreen';
 import { LoginScreen } from './screens/LoginScreen';
+import { AdminScreen } from './screens/AdminScreen';
 import { RootStackParamList } from './types/navigation';
 import { DatabaseService } from './services/database.service';
 import { SyncService } from './services/sync.service';
@@ -124,6 +125,7 @@ function AppNavigator() {
             <Stack.Screen name="Setup" component={SetupScreen} />
             <Stack.Screen name="Measurement" component={MeasurementScreen} />
             <Stack.Screen name="SyncErrors" component={SyncErrorsScreen} />
+            <Stack.Screen name="Admin" component={AdminScreen} />
           </>
         )}
       </Stack.Navigator>

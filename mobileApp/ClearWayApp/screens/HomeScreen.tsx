@@ -15,6 +15,8 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const isAdmin = user?.role === 'admin';
+
   const handleLogout = async () => {
     Alert.alert(
       'Odhlásit se',
@@ -79,6 +81,15 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
           variant="secondary"
           style={styles.syncErrorsButton}
         />
+        
+        {isAdmin && (
+          <Button
+            title="Admin panel"
+            onPress={() => navigation.navigate('Admin')}
+            variant="secondary"
+            style={styles.adminButton}
+          />
+        )}
       </View>
     </View>
   );
@@ -152,6 +163,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   syncErrorsButton: {
+    minWidth: 200,
+    paddingVertical: 12,
+    marginTop: 12,
+  },
+  adminButton: {
     minWidth: 200,
     paddingVertical: 12,
     marginTop: 12,

@@ -1,4 +1,4 @@
-import { MeasurementBatch, Vehicle, Sensor, Session } from '../types';
+import { MeasurementBatch, Vehicle, Sensor, Session, CreateVehicleRequest, CreateSensorRequest } from '../types';
 import { AuthService } from './auth.service';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
@@ -222,6 +222,104 @@ export class ApiService {
       
       // Wrap other errors (network, timeout, etc.)
       console.error('Failed to send batch:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create new vehicle (admin only)
+   */
+  static async createVehicle(request: CreateVehicleRequest): Promise<Vehicle> {
+    try {
+      console.log('🔄 Creating vehicle:', request.vehicle_name);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const authHeaders = await this.getAuthHeaders();
+      
+      const response = await fetch(`${API_BASE_URL}${API_PREFIX}/vehicles`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          await AuthService.clearToken();
+          throw new Error('Unauthorized - please login again');
+        }
+        
+        let detail: string | undefined;
+        try {
+          const errorData = await response.json();
+          detail = errorData.detail || errorData.message;
+        } catch {
+          detail = response.statusText;
+        }
+        
+        throw new ApiError(response.status, response.statusText, detail);
+      }
+      
+      const data = await response.json();
+      console.log('✓ Vehicle created:', data.id);
+      return data;
+    } catch (error) {
+      console.error('Failed to create vehicle:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create new sensor (admin only)
+   */
+  static async createSensor(request: CreateSensorRequest): Promise<Sensor> {
+    try {
+      console.log('🔄 Creating sensor:', request.description);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const authHeaders = await this.getAuthHeaders();
+      
+      const response = await fetch(`${API_BASE_URL}${API_PREFIX}/sensors`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          await AuthService.clearToken();
+          throw new Error('Unauthorized - please login again');
+        }
+        
+        let detail: string | undefined;
+        try {
+          const errorData = await response.json();
+          detail = errorData.detail || errorData.message;
+        } catch {
+          detail = response.statusText;
+        }
+        
+        throw new ApiError(response.status, response.statusText, detail);
+      }
+      
+      const data = await response.json();
+      console.log('✓ Sensor created:', data.id);
+      return data;
+    } catch (error) {
+      console.error('Failed to create sensor:', error);
       throw error;
     }
   }

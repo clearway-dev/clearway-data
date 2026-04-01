@@ -56,12 +56,11 @@ export interface SyncStatus {
 
 // Authentication types
 export interface User {
-  id: string;
+  id: number;
   email: string;
   full_name: string | null;
   is_active: boolean;
-  is_superuser: boolean;
-  is_verified: boolean;
+  role: string;
 }
 
 export interface LoginRequest {
@@ -79,5 +78,16 @@ export interface AuthState {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+}
+
+// Admin types
+export interface CreateVehicleRequest {
+  vehicle_name: string;
+  width: number;
+}
+
+export interface CreateSensorRequest {
+  description: string;
+  is_active: boolean;
 }
 
