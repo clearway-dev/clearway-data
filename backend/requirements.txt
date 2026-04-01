@@ -23,3 +23,8 @@ redis==5.0.1            # Klient pro Redis (slouží jako message broker pro Cel
 
 # --- Logování ---
 loguru==0.7.2
+
+# --- Autentizace a Bezpečnost ---
+passlib[bcrypt]==1.7.4      # Hashování hesel (bcrypt)
+python-jose[cryptography]==3.3.0  # JWT tokeny
+python-multipart==0.0.6     # Pro OAuth2PasswordRequestForm

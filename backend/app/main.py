@@ -13,6 +13,8 @@ from sqlalchemy.exc import IntegrityError
 from . import models, schemas
 from .worker import process_batch_task
 from .database import get_db, engine, Base
+from .routers import auth
+from .routers.auth import get_current_active_user, require_admin
 
 # Configure Loguru for FastAPI process
 os.makedirs("/app/logs", exist_ok=True)
@@ -24,9 +26,6 @@ logger.add(
     level="INFO",
 )
 
-# Create all database tables
-# Note: In production, use Alembic migrations instead
-Base.metadata.create_all(bind=engine)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -35,22 +34,13 @@ app = FastAPI(
     description="API for road width measurement data collection and processing"
 )
 
-# Configure CORS - allows requests from React Native mobile app
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to specific domains
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 # ==============================================
 # HEALTH CHECK ENDPOINTS
 # ==============================================
 
 @app.get("/", tags=["health"])
-def root():
+async def root():
     """Root endpoint - API status check"""
     return {
         "message": "ClearWay API is running",
@@ -60,13 +50,13 @@ def root():
 
 
 @app.get("/health", tags=["health"])
-def health_check():
+async def health_check():
     """Health check endpoint for monitoring"""
     return {"status": "healthy"}
 
 
 @app.get("/db-check", tags=["health"])
-def check_database_connection(db: Session = Depends(get_db)):
+async def check_database_connection(db: Session = Depends(get_db)):
     """
     Database connection check endpoint.
     Verifies that the API can successfully connect to PostgreSQL.
@@ -95,10 +85,15 @@ vehicles_router = APIRouter(prefix="/api/vehicles", tags=["vehicles"])
 
 
 @vehicles_router.get("", response_model=List[schemas.VehicleResponse])
-def get_vehicles(db: Session = Depends(get_db)):
+async def get_vehicles(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
     """
     Get list of all vehicles.
     Mobile app uses this to populate the vehicle selection dropdown.
+    
+    Requires: Active user authentication
     """
     try:
         vehicles = db.query(models.Vehicle).all()
@@ -112,10 +107,16 @@ def get_vehicles(db: Session = Depends(get_db)):
 
 
 @vehicles_router.post("", response_model=schemas.VehicleResponse, status_code=status.HTTP_201_CREATED)
-def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)):
+async def create_vehicle(
+    vehicle: schemas.VehicleCreate,
+    db: Session = Depends(get_db),
+    admin_user: models.User = Depends(require_admin)
+):
     """
     Create a new vehicle.
     Used for adding measurement vehicles to the system.
+    
+    Requires: Admin role
     """
     try:
         # Create new vehicle instance
@@ -141,8 +142,16 @@ def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)
 
 
 @vehicles_router.get("/{vehicle_id}", response_model=schemas.VehicleResponse)
-def get_vehicle(vehicle_id: str, db: Session = Depends(get_db)):
-    """Get specific vehicle by ID"""
+async def get_vehicle(
+    vehicle_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    """
+    Get specific vehicle by ID
+    
+    Requires: Active user authentication
+    """
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(
@@ -160,8 +169,15 @@ sensors_router = APIRouter(prefix="/api/sensors", tags=["sensors"])
 
 
 @sensors_router.get("", response_model=List[schemas.SensorResponse])
-def get_sensors(db: Session = Depends(get_db)):
-    """Get list of all sensors"""
+async def get_sensors(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    """
+    Get list of all sensors
+    
+    Requires: Active user authentication
+    """
     try:
         sensors = db.query(models.Sensor).filter(models.Sensor.is_active == True).all()
         return sensors
@@ -174,8 +190,16 @@ def get_sensors(db: Session = Depends(get_db)):
 
 
 @sensors_router.post("", response_model=schemas.SensorResponse, status_code=status.HTTP_201_CREATED)
-def create_sensor(sensor: schemas.SensorCreate, db: Session = Depends(get_db)):
-    """Create a new sensor"""
+async def create_sensor(
+    sensor: schemas.SensorCreate,
+    db: Session = Depends(get_db),
+    admin_user: models.User = Depends(require_admin)
+):
+    """
+    Create a new sensor
+    
+    Requires: Admin role
+    """
     try:
         db_sensor = models.Sensor(
             description=sensor.description,
@@ -206,10 +230,16 @@ sessions_router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
 @sessions_router.post("", response_model=schemas.SessionResponse, status_code=status.HTTP_201_CREATED)
-def create_session(session: schemas.SessionCreate, db: Session = Depends(get_db)):
+async def create_session(
+    session: schemas.SessionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
     """
     Create a new measurement session.
     Mobile app calls this when starting a new measurement run.
+    
+    Requires: Active user authentication
     """
     try:
         # Verify sensor exists
@@ -260,10 +290,16 @@ measurements_router = APIRouter(prefix="/api/measurements", tags=["measurements"
 
 
 @measurements_router.get("/recent", response_model=List[schemas.RawMeasurementResponse])
-def get_recent_measurements(limit: int = 100, db: Session = Depends(get_db)):
+async def get_recent_measurements(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
     """
     Get recent measurements for debugging/monitoring.
     Returns the most recent measurements ordered by timestamp.
+    
+    Requires: Active user authentication
     """
     try:
         measurements = db.query(models.RawMeasurement)\
@@ -279,13 +315,19 @@ def get_recent_measurements(limit: int = 100, db: Session = Depends(get_db)):
         )
 
 
-@app.post("/raw-data/batch", response_model=schemas.BatchMeasurementResponse, status_code=status.HTTP_201_CREATED, tags=["measurements"])
-def ingest_batch_measurements(payload: schemas.BatchMeasurementCreate, db: Session = Depends(get_db)):
+@measurements_router.post("/raw-data/batch", response_model=schemas.BatchMeasurementResponse, status_code=status.HTTP_201_CREATED, tags=["measurements"])
+async def ingest_batch_measurements(
+    payload: schemas.BatchMeasurementCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
     """
     Ingest batch of measurements from mobile app (OFFLINE-FIRST ARCHITECTURE).
     
     This is the PRIMARY endpoint for mobile data ingestion.
     Mobile app collects measurements offline and sends them as a single batch.
+    
+    Requires: Active user authentication
     
     This endpoint:
     1. Validates session existence
@@ -412,96 +454,13 @@ def ingest_batch_measurements(payload: schemas.BatchMeasurementCreate, db: Sessi
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process batch: {str(e)}"
         )
-        
-        total_received = len(payload.measurements)
-        total_stored = 0
-        
-        logger.info(f"Processing batch of {total_received} measurements for session {payload.session_id}")
-        
-        # 2. Create new batch record with status='pending'
-        new_batch = models.Batch(
-            session_id=payload.session_id,
-            status='pending'
-        )
-        
-        db.add(new_batch)
-        db.flush()  # Get the generated batch UUID
-        
-        batch_id = new_batch.id
-        logger.info(f"Created batch {batch_id} for session {payload.session_id}")
-        
-        # 3. Prepare measurements with batch_id FK
-        measurements_to_insert = []
-        
-        for measurement in payload.measurements:
-            # Structural validation is handled by Pydantic schema.
-            # Business/logical validation is delegated to Celery pipeline.
-            new_measurement = models.RawMeasurement(
-                batch_id=batch_id,  # NEW: Use batch_id instead of session_id
-                measured_at=measurement.measured_at,
-                latitude=measurement.latitude,
-                longitude=measurement.longitude,
-                distance_left=measurement.distance_left,
-                distance_right=measurement.distance_right,
-                speed=measurement.speed,
-                accuracy_gps=measurement.accuracy_gps,
-                is_valid=True
-            )
-            
-            measurements_to_insert.append(new_measurement)
-        
-        # 4. Perform BULK INSERT (efficient!)
-        if measurements_to_insert:
-            try:
-                db.add_all(measurements_to_insert)
-                db.flush()  # Flush to assign IDs
-                
-                total_stored = len(measurements_to_insert)
-
-                # 5. NEW: Queue task with ONLY batch_id (not measurement IDs array!)
-                process_batch_task.delay(str(batch_id))
-                
-                db.commit()
-                
-                logger.info(
-                    f"Batch {batch_id}: {total_stored} measurements stored and queued for async processing"
-                )
-                
-            except IntegrityError as ie:
-                db.rollback()
-                logger.error(f"Bulk insert failed - likely foreign key violation: {str(ie)}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Database constraint violation - check that session_id exists: {str(ie)}"
-                )
-        
-        return schemas.BatchMeasurementResponse(
-            success=True,
-            message=f"Batch {batch_id} created: {total_stored}/{total_received} measurements stored",
-            batch_id=batch_id,
-            total_received=total_received,
-            total_stored=total_stored,
-            total_invalid=0,
-            total_rejected=0,
-            invalid_indices=[],
-            rejected_indices=[]
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error processing batch: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process batch: {str(e)}"
-        )
 
 
 # ==============================================
 # REGISTER ROUTERS
 # ==============================================
 
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])  # Authentication endpoints
 app.include_router(vehicles_router)
 app.include_router(sensors_router)
 app.include_router(sessions_router)
