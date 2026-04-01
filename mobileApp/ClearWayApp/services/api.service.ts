@@ -1,4 +1,5 @@
 import { MeasurementBatch, Vehicle, Sensor, Session } from '../types';
+import { AuthService } from './auth.service';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
 const API_PREFIX = '/api';
@@ -43,6 +44,19 @@ export class ApiError extends Error {
 
 export class ApiService {
   /**
+   * Get authorization headers with Bearer token
+   */
+  private static async getAuthHeaders(): Promise<HeadersInit> {
+    const token = await AuthService.getToken();
+    if (!token) {
+      throw new Error('No authentication token available');
+    }
+    return {
+      'Authorization': `Bearer ${token}`,
+    };
+  }
+
+  /**
    * Get list of available vehicles from backend
    */
   static async getVehicles(): Promise<Vehicle[]> {
@@ -50,8 +64,11 @@ export class ApiService {
       console.log('🔄 Fetching vehicles from:', `${API_BASE_URL}${API_PREFIX}/vehicles`);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      const authHeaders = await this.getAuthHeaders();
     
       const response = await fetch(`${API_BASE_URL}${API_PREFIX}/vehicles`, {
+        headers: authHeaders,
         signal: controller.signal,
       });
     
@@ -60,6 +77,10 @@ export class ApiService {
       console.log('✓ Vehicles response status:', response.status);
     
       if (!response.ok) {
+        if (response.status === 401) {
+          await AuthService.clearToken();
+          throw new Error('Unauthorized - please login again');
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     
@@ -81,7 +102,10 @@ export class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
       
+      const authHeaders = await this.getAuthHeaders();
+      
       const response = await fetch(`${API_BASE_URL}${API_PREFIX}/sensors`, {
+        headers: authHeaders,
         signal: controller.signal,
       });
       
@@ -90,6 +114,10 @@ export class ApiService {
       console.log('✓ Sensors response status:', response.status);
       
       if (!response.ok) {
+        if (response.status === 401) {
+          await AuthService.clearToken();
+          throw new Error('Unauthorized - please login again');
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
@@ -110,9 +138,12 @@ export class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
       
+      const authHeaders = await this.getAuthHeaders();
+      
       const response = await fetch(`${API_BASE_URL}${API_PREFIX}/sessions`, {
         method: 'POST',
         headers: {
+          ...authHeaders,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -125,6 +156,10 @@ export class ApiService {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
+        if (response.status === 401) {
+          await AuthService.clearToken();
+          throw new Error('Unauthorized - please login again');
+        }
         const error = await response.json();
         throw new Error(error.detail || 'Failed to create session');
       }
@@ -145,9 +180,12 @@ export class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for batch
       
-      const response = await fetch(`${API_BASE_URL}/raw-data/batch`, {
+      const authHeaders = await this.getAuthHeaders();
+      
+      const response = await fetch(`${API_BASE_URL}${API_PREFIX}/measurements/raw-data/batch`, {
         method: 'POST',
         headers: {
+          ...authHeaders,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(batch),
@@ -165,6 +203,11 @@ export class ApiService {
         } catch {
           // Response body is not JSON, use status text
           detail = response.statusText;
+        }
+        
+        if (response.status === 401) {
+          await AuthService.clearToken();
+          throw new ApiError(response.status, response.statusText, 'Unauthorized - please login again');
         }
         
         throw new ApiError(response.status, response.statusText, detail);

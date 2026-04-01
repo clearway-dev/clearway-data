@@ -16,6 +16,7 @@
     "expo": "~54.0.33",
     "expo-keep-awake": "~15.0.8",
     "expo-location": "~19.0.8",
+    "expo-secure-store": "^55.0.9",
     "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
