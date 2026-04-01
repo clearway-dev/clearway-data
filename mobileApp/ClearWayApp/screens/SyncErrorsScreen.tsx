@@ -8,11 +8,14 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { DatabaseService } from '../services/database.service';
 import { SyncService } from '../services/sync.service';
+import { LocalMeasurement } from '../types';
 
 type SyncErrorsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SyncErrors'>;
 
@@ -41,6 +44,9 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
   const [syncingSessionId, setSyncingSessionId] = useState<string | null>(null);
   const [retryingSessionId, setRetryingSessionId] = useState<string | null>(null);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [detailData, setDetailData] = useState<LocalMeasurement[]>([]);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -66,6 +72,36 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
     setIsRefreshing(true);
     loadData();
   }, [loadData]);
+
+  const handleOpenDetail = async (sessionId: string, isError: boolean) => {
+    setSelectedSessionId(sessionId);
+    setIsLoadingDetail(true);
+    
+    try {
+      let data: LocalMeasurement[];
+      
+      if (isError) {
+        // Load error records for this session
+        const allErrors = await DatabaseService.getErrorRecords(10000);
+        data = allErrors.filter(m => m.session_id === sessionId);
+      } else {
+        // Load unsent records for this session
+        data = await DatabaseService.getUnsyncedMeasurementsBySession(sessionId, 10000);
+      }
+      
+      setDetailData(data);
+    } catch (error) {
+      console.error('Failed to load detail data:', error);
+      Alert.alert('Chyba', 'Nepodařilo se načíst detailní data.');
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  };
+
+  const handleCloseDetail = () => {
+    setSelectedSessionId(null);
+    setDetailData([]);
+  };
 
   const handleSyncNow = async (sessionId: string) => {
     try {
@@ -198,7 +234,11 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
       : 'Neznámé datum';
 
     return (
-      <View style={styles.unsentCard}>
+      <TouchableOpacity 
+        style={styles.unsentCard}
+        onPress={() => handleOpenDetail(item.session_id, false)}
+        activeOpacity={0.7}
+      >
         <View style={styles.errorHeader}>
           <View>
             <Text style={styles.sessionId}>Jízda {sessionIdShort}...</Text>
@@ -212,7 +252,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={[styles.syncButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleSyncNow(item.session_id)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleSyncNow(item.session_id);
+            }}
             disabled={isProcessing}
           >
             {isSyncing ? (
@@ -224,7 +267,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
 
           <TouchableOpacity
             style={[styles.deleteButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleDeleteUnsent(item.session_id, item.count)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteUnsent(item.session_id, item.count);
+            }}
             disabled={isProcessing}
           >
             {isDeleting ? (
@@ -234,7 +280,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -248,7 +294,11 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
       : 'Neznámé datum';
 
     return (
-      <View style={styles.errorCard}>
+      <TouchableOpacity 
+        style={styles.errorCard}
+        onPress={() => handleOpenDetail(item.session_id, true)}
+        activeOpacity={0.7}
+      >
         <View style={styles.errorHeader}>
           <View>
             <Text style={styles.sessionId}>Jízda {sessionIdShort}...</Text>
@@ -271,7 +321,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={[styles.retryButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleRetry(item.session_id)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleRetry(item.session_id);
+            }}
             disabled={isProcessing}
           >
             {isRetrying ? (
@@ -283,7 +336,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
 
           <TouchableOpacity
             style={[styles.deleteButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleDelete(item.session_id, item.count)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDelete(item.session_id, item.count);
+            }}
             disabled={isProcessing}
           >
             {isDeleting ? (
@@ -293,7 +349,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -308,6 +364,85 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
       </Text>
     </View>
   );
+
+  const renderDetailModal = () => {
+    if (!selectedSessionId) return null;
+
+    const sessionIdShort = selectedSessionId.substring(0, 8);
+    const isError = detailData.length > 0 && detailData[0].synced === -1;
+
+    return (
+      <Modal
+        visible={selectedSessionId !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseDetail}
+      >
+        <Pressable style={styles.modalOverlay} onPress={handleCloseDetail}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isError ? '❌ Detail chyby' : '⏳ Detail čekajících dat'}
+              </Text>
+              <TouchableOpacity onPress={handleCloseDetail} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalSessionInfo}>
+              <Text style={styles.modalSessionLabel}>ID jízdy:</Text>
+              <Text style={styles.modalSessionValue}>{selectedSessionId}</Text>
+              <Text style={styles.modalSessionShort}>({sessionIdShort}...)</Text>
+            </View>
+
+            {isLoadingDetail ? (
+              <View style={styles.modalLoading}>
+                <ActivityIndicator size="large" color="#18181b" />
+                <Text style={styles.modalLoadingText}>Načítání detailů...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.modalScrollView}>
+                <View style={styles.modalStats}>
+                  <View style={styles.modalStatItem}>
+                    <Text style={styles.modalStatLabel}>Celkem záznamů</Text>
+                    <Text style={styles.modalStatValue}>{detailData.length}</Text>
+                  </View>
+                  {detailData.length > 0 && (
+                    <>
+                      <View style={styles.modalStatItem}>
+                        <Text style={styles.modalStatLabel}>První měření</Text>
+                        <Text style={styles.modalStatValue}>
+                          {new Date(detailData[0].measured_at).toLocaleString('cs-CZ')}
+                        </Text>
+                      </View>
+                      <View style={styles.modalStatItem}>
+                        <Text style={styles.modalStatLabel}>Poslední měření</Text>
+                        <Text style={styles.modalStatValue}>
+                          {new Date(detailData[detailData.length - 1].measured_at).toLocaleString('cs-CZ')}
+                        </Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                {isError && detailData.length > 0 && detailData[0].error_message && (
+                  <View style={styles.modalErrorBox}>
+                    <Text style={styles.modalErrorLabel}>Chybová zpráva:</Text>
+                    <Text style={styles.modalErrorText}>{detailData[0].error_message}</Text>
+                    {detailData[0].error_at && (
+                      <Text style={styles.modalErrorDate}>
+                        Čas chyby: {new Date(detailData[0].error_at).toLocaleString('cs-CZ')}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -390,6 +525,8 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
           )}
         </ScrollView>
       )}
+
+      {renderDetailModal()}
     </View>
   );
 };
@@ -631,5 +768,128 @@ const styles = StyleSheet.create({
     color: '#71717a',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '90%',
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e4e4e7',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#18181b',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f4f4f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 20,
+    color: '#71717a',
+    fontWeight: 'bold',
+  },
+  modalSessionInfo: {
+    backgroundColor: '#f9fafb',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e4e4e7',
+  },
+  modalSessionLabel: {
+    fontSize: 12,
+    color: '#71717a',
+    marginBottom: 4,
+  },
+  modalSessionValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#18181b',
+    fontFamily: 'monospace',
+  },
+  modalSessionShort: {
+    fontSize: 12,
+    color: '#a1a1aa',
+    marginTop: 2,
+  },
+  modalLoading: {
+    padding: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalLoadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#71717a',
+  },
+  modalScrollView: {
+    maxHeight: '100%',
+  },
+  modalStats: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e4e4e7',
+  },
+  modalStatItem: {
+    marginBottom: 12,
+  },
+  modalStatLabel: {
+    fontSize: 12,
+    color: '#71717a',
+    marginBottom: 4,
+  },
+  modalStatValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#18181b',
+  },
+  modalErrorBox: {
+    backgroundColor: '#fef2f2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#dc2626',
+    padding: 16,
+    margin: 16,
+    marginTop: 0,
+    borderRadius: 8,
+  },
+  modalErrorLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#991b1b',
+    marginBottom: 8,
+  },
+  modalErrorText: {
+    fontSize: 14,
+    color: '#dc2626',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  modalErrorDate: {
+    fontSize: 12,
+    color: '#991b1b',
+    fontStyle: 'italic',
   },
 });
