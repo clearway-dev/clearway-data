@@ -3,6 +3,7 @@ ClearWay FastAPI Backend
 Main application entry point with API endpoints for data ingestion.
 """
 import os
+import time
 from typing import List
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -268,7 +269,7 @@ async def create_session(
         db.commit()
         db.refresh(db_session)
         
-        logger.info(f"Created session: {db_session.id} (Vehicle: {vehicle.vehicle_name})")
+        logger.info(f"Session created: {db_session.id} (Vehicle: {vehicle.vehicle_name}, Sensor: {sensor.description or sensor.id})")
         return db_session
         
     except HTTPException:
@@ -349,6 +350,8 @@ async def ingest_batch_measurements(
     Returns:
         BatchMeasurementResponse with statistics about processed measurements
     """
+    # Start timing for latency calculation
+    start_time = time.time()
     batch_id = None  # Initialize for exception handling
     
     try:
@@ -363,7 +366,7 @@ async def ingest_batch_measurements(
         total_received = len(payload.measurements)
         total_stored = 0
         
-        logger.info(f"Processing batch of {total_received} measurements for session {payload.session_id}")
+        logger.debug(f"Processing batch of {total_received} measurements for session {payload.session_id}")
         
         # 2. Create new batch record with status='pending'
         new_batch = models.Batch(
@@ -375,7 +378,7 @@ async def ingest_batch_measurements(
         db.flush()  # Get the generated batch UUID
         
         batch_id = new_batch.id
-        logger.info(f"Created batch {batch_id} for session {payload.session_id}")
+        logger.debug(f"Created batch {batch_id} for session {payload.session_id}")
         
         # 3. Prepare measurements with batch_id FK
         measurements_to_insert = []
@@ -408,14 +411,14 @@ async def ingest_batch_measurements(
                 # CRITICAL: Commit FIRST, then queue task
                 db.commit()
                 
-                logger.info(
+                logger.debug(
                     f"Batch {batch_id}: {total_stored} measurements committed to database"
                 )
                 
                 # 5. Queue task AFTER successful commit - prevents race condition
                 try:
                     process_batch_task.delay(str(batch_id))
-                    logger.info(
+                    logger.debug(
                         f"Batch {batch_id}: Celery task queued for async processing"
                     )
                 except Exception as celery_error:
@@ -432,6 +435,15 @@ async def ingest_batch_measurements(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Database constraint violation - check that session_id exists: {str(ie)}"
                 )
+        
+        # Calculate latency
+        latency_ms = int((time.time() - start_time) * 1000)
+        
+        # Single comprehensive summary log
+        logger.info(
+            f"Batch {batch_id} processed: {total_received} received, {total_stored} valid, "
+            f"queued for Celery in {latency_ms}ms"
+        )
         
         return schemas.BatchMeasurementResponse(
             success=True,
