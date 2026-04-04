@@ -266,6 +266,8 @@ def _apply_width_median_filter(widths: list[float], window: int = WIDTH_MEDIAN_W
 @celery_app.task(
     name="process_batch_task",
     bind=True,
+    acks_late=True,  # Acknowledge task only after successful completion
+    reject_on_worker_lost=True,  # Requeue task if worker crashes/dies
     autoretry_for=(BatchNotFoundError,),
     retry_backoff=True,
     retry_backoff_max=600,
@@ -294,14 +296,23 @@ def process_batch_task(self, batch_id: str) -> dict:
     - Initial retry delay: 10 seconds
     - Uses exponential backoff with jitter to prevent thundering herd
     - Max backoff: 600 seconds (10 minutes)
+    
+    Reliability features:
+    - acks_late=True: Task acknowledged only after successful completion
+    - reject_on_worker_lost=True: Task requeued if worker crashes
+    - Idempotence: Safe to retry - checks if batch already completed
+    - Poison pill handling: After max retries, marks batch as 'failed'
     """
+    import uuid
+    
     db: Session = SessionLocal()
+    batch_uuid: uuid.UUID | None = None
+    
     try:
-        import uuid
         batch_uuid = uuid.UUID(batch_id)
         
         # ------------------------------------------------------------------ #
-        # LOAD BATCH and update status to 'processing'
+        # IDEMPOTENCE CHECK - Skip if already completed
         # ------------------------------------------------------------------ #
         batch: models.Batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
         
@@ -315,6 +326,17 @@ def process_batch_task(self, batch_id: str) -> dict:
                 f"Batch {batch_id} not found in database. "
                 f"This may be a race condition - task will retry."
             )
+        
+        # IDEMPOTENCE: If batch already completed, skip processing
+        if batch.status == 'completed':
+            logger.info(
+                f"Batch {batch_id} already completed (idempotence check) - skipping duplicate processing"
+            )
+            return {
+                "batch_id": batch_id,
+                "status": "completed",
+                "message": "Batch already completed (idempotent retry)",
+            }
         
         # Update batch status to 'processing'
         batch.status = 'processing'
@@ -565,20 +587,55 @@ def process_batch_task(self, batch_id: str) -> dict:
         db.close()
         raise
     except Exception as e:
-        # Update batch status to 'failed' on error
-        batch: models.Batch | None = None
-        try:
-            if 'batch_uuid' in locals():
-                batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
-            if batch:
-                batch.status = 'failed'
-                db.commit()
-                logger.error(f"Batch {batch_id} failed: {str(e)}")
-        except Exception as commit_error:
-            logger.error(f"Failed to update batch status to 'failed': {str(commit_error)}")
-        
         db.rollback()
-        logger.exception(f"Unhandled error in process_batch_task for batch {batch_id}")
+        
+        # ------------------------------------------------------------------ #
+        # AUTO-RETRY logic for transient errors (e.g., DB connection issues)
+        # ------------------------------------------------------------------ #
+        # Check if we have retries remaining
+        if self.request.retries < 3:
+            logger.warning(
+                f"Batch {batch_id} encountered error (attempt {self.request.retries + 1}/3): {str(e)} - will retry in 60s"
+            )
+            db.close()
+            # Retry with 60 second countdown
+            raise self.retry(exc=e, countdown=60, max_retries=3)
+        
+        # ------------------------------------------------------------------ #
+        # POISON PILL HANDLING - Max retries exhausted
+        # ------------------------------------------------------------------ #
+        logger.error(
+            f"Batch {batch_id} failed after {self.request.retries + 1} attempts (poison pill detected): {str(e)}"
+        )
+        
+        # Mark batch as 'failed' in database to prevent infinite retries
+        if batch_uuid is not None:
+            try:
+                # Refresh database connection in case it's stale
+                db.close()
+                db = SessionLocal()
+                
+                failed_batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+                if failed_batch:
+                    failed_batch.status = 'failed'
+                    db.commit()
+                    logger.info(f"Batch {batch_id} marked as 'failed' in database")
+                else:
+                    logger.warning(f"Could not find batch {batch_id} to mark as failed")
+            except Exception as commit_error:
+                logger.error(f"Failed to update batch {batch_id} status to 'failed': {str(commit_error)}")
+            finally:
+                db.close()
+        else:
+            logger.warning(f"Cannot mark batch as failed - batch_uuid not parsed from {batch_id}")
+        
+        # Log full exception details for debugging
+        logger.exception(f"Full traceback for failed batch {batch_id}")
+        
+        # Re-raise the original exception to mark task as failed in Celery
         raise
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
