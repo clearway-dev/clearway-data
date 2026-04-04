@@ -104,59 +104,99 @@ def _map_match(
     db: Session,
     lat: float,
     lon: float,
+    vehicle_heading: float | None = None,
     max_distance_m: float = MAP_MATCH_MAX_DISTANCE_M,
 ) -> tuple[float, float] | None:
     """
-    Project a GPS point onto the nearest road segment using PostGIS.
+    Project a GPS point onto the nearest road segment using PostGIS with heading-aware selection.
 
     Searches road_segments within *max_distance_m* metres (geography cast for
-    accurate metric distances), then returns the closest point on the winning
-    segment's geometry.
+    accurate metric distances), returns the top 3 closest candidates, and selects
+    the best match based on heading alignment when vehicle_heading is provided.
+
+    Args:
+        db: Database session
+        lat: GPS latitude
+        lon: GPS longitude
+        vehicle_heading: Optional vehicle heading in degrees (0-360)
+        max_distance_m: Maximum distance to search for road segments
 
     Returns (snapped_lat, snapped_lon) or None when no match is found.
     """
-    row = db.execute(
+    rows = db.execute(
         text(
             """
             SELECT
                 ST_Y(ST_ClosestPoint(rs.geom,
                     ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lat,
                 ST_X(ST_ClosestPoint(rs.geom,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lon
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lon,
+                degrees(ST_Azimuth(
+                    ST_StartPoint(rs.geom),
+                    ST_EndPoint(rs.geom)
+                )) AS road_heading,
+                ST_Distance(
+                    rs.geom::geography,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+                ) AS distance
             FROM road_segments rs
             WHERE ST_DWithin(
                 rs.geom::geography,
                 ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
                 :max_dist
             )
-            ORDER BY ST_Distance(
-                rs.geom::geography,
-                ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
-            )
-            LIMIT 1
+            ORDER BY distance
+            LIMIT 3
             """
-            # WITH p AS (
-            #     SELECT ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) AS pt
-            # )
-            # SELECT
-            #     ST_Y(q.cp) AS snapped_lat,
-            #     ST_X(q.cp) AS snapped_lon
-            # FROM p
-            # CROSS JOIN LATERAL (
-            #     SELECT ST_ClosestPoint(rs.geom, p.pt) AS cp
-            #     FROM road_segments rs
-            #     WHERE ST_DWithin(rs.geom::geography, p.pt::geography, :max_dist)
-            #     ORDER BY ST_Distance(rs.geom::geography, p.pt::geography)
-            #     LIMIT 1
-            # ) q;
         ),
         {"lat": lat, "lon": lon, "max_dist": max_distance_m},
-    ).fetchone()
+    ).fetchall()
 
-    if row is None:
+    if not rows:
         return None
 
-    return float(row.snapped_lat), float(row.snapped_lon)
+    # If no vehicle heading provided, return the closest segment (index 0)
+    if vehicle_heading is None:
+        logger.debug(
+            f"map_match selection_method=fallback_no_heading lat={lat:.6f} lon={lon:.6f} "
+            f"snapped_lat={rows[0].snapped_lat:.6f} snapped_lon={rows[0].snapped_lon:.6f}"
+        )
+        return float(rows[0].snapped_lat), float(rows[0].snapped_lon)
+
+    # Helper: Calculate angular difference with 360-degree wrap-around
+    def angular_diff(angle1: float, angle2: float) -> float:
+        """Calculate the minimum angular difference between two angles (0-180 degrees)."""
+        diff = abs(angle1 - angle2) % 360
+        return min(diff, 360 - diff)
+
+    # Iterate through candidates and select the first one that passes heading check
+    for idx, row in enumerate(rows):
+        road_heading = float(row.road_heading) if row.road_heading is not None else None
+        
+        if road_heading is None:
+            # Skip segments without valid heading (e.g., zero-length segments)
+            continue
+        
+        diff = angular_diff(vehicle_heading, road_heading)
+        
+        # Bidirectional check: same direction (<=45°) or opposite direction (>=135°)
+        is_valid = diff <= 45.0 or diff >= 135.0
+        
+        if is_valid:
+            logger.debug(
+                f"map_match selection_method=heading_validated candidate={idx+1}/3 "
+                f"vehicle_heading={vehicle_heading:.1f}° road_heading={road_heading:.1f}° "
+                f"angular_diff={diff:.1f}° lat={lat:.6f} lon={lon:.6f} "
+                f"snapped_lat={row.snapped_lat:.6f} snapped_lon={row.snapped_lon:.6f}"
+            )
+            return float(row.snapped_lat), float(row.snapped_lon)
+
+    # Fallback: None of the 3 candidates passed heading check, return the closest
+    logger.debug(
+        f"map_match selection_method=fallback_no_valid_heading vehicle_heading={vehicle_heading:.1f}° "
+        f"lat={lat:.6f} lon={lon:.6f} snapped_lat={rows[0].snapped_lat:.6f} snapped_lon={rows[0].snapped_lon:.6f}"
+    )
+    return float(rows[0].snapped_lat), float(rows[0].snapped_lon)
 
 
 def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -173,6 +213,33 @@ def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) ->
     )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return earth_radius_m * c
+
+
+def _calculate_heading(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the bearing/heading from point 1 to point 2 in degrees (0-360).
+    
+    Uses the forward azimuth formula. 0° = North, 90° = East, 180° = South, 270° = West.
+    
+    Args:
+        lat1, lon1: Coordinates of the starting point
+        lat2, lon2: Coordinates of the ending point
+        
+    Returns:
+        Heading in degrees (0-360)
+    """
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lon = math.radians(lon2 - lon1)
+    
+    x = math.sin(delta_lon) * math.cos(lat2_rad)
+    y = math.cos(lat1_rad) * math.sin(lat2_rad) - math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(delta_lon)
+    
+    heading_rad = math.atan2(x, y)
+    heading_deg = math.degrees(heading_rad)
+    
+    # Normalize to 0-360 range
+    return (heading_deg + 360) % 360
 
 
 def _apply_width_median_filter(widths: list[float], window: int = WIDTH_MEDIAN_WINDOW) -> list[float]:
@@ -364,11 +431,27 @@ def process_batch_task(self, batch_id: str) -> dict:
         unmatched_count = 0
 
         matched_points: list[dict] = []
+        
+        # Track previous valid measurement for heading calculation
+        prev_measurement: models.RawMeasurement | None = None
 
         for m in valid_measurements:
             vehicle_width: float = m.batch.session.vehicle.width
+            
+            # Calculate vehicle heading from consecutive GPS points
+            vehicle_heading: float | None = None
+            if prev_measurement is not None:
+                # Only calculate heading if points are different
+                if (prev_measurement.latitude != m.latitude or 
+                    prev_measurement.longitude != m.longitude):
+                    vehicle_heading = _calculate_heading(
+                        prev_measurement.latitude,
+                        prev_measurement.longitude,
+                        m.latitude,
+                        m.longitude
+                    )
 
-            snapped = _map_match(db, m.latitude, m.longitude)
+            snapped = _map_match(db, m.latitude, m.longitude, vehicle_heading)
             if snapped is None:
                 # No road segment within range - mark as invalid and record reason.
                 unmatched_count += 1
@@ -408,6 +491,9 @@ def process_batch_task(self, batch_id: str) -> dict:
                     "raw_width": raw_width,
                 }
             )
+            
+            # Update previous measurement for next heading calculation
+            prev_measurement = m
 
         # Final cleaning step: median filter AFTER map-matching.
         # Batch is already chronologically ordered and belongs to one vehicle.
