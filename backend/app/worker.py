@@ -387,12 +387,36 @@ def process_batch_task(self, batch_id: str) -> dict:
                     m.longitude,
                 )
 
-                is_unrealistic_jump = (
-                    (time_diff_s == 0 and distance_m > 0)
-                    or (time_diff_s > 0 and (distance_m / time_diff_s) > MAX_REALISTIC_SPEED_MPS)
-                )
-
-                if is_unrealistic_jump:
+                # Handle duplicate timestamp or zero time difference
+                if time_diff_s == 0:
+                    if distance_m > 0:
+                        # Duplicate timestamp but different location - reject
+                        invalid_count += 1
+                        m.is_valid = False
+                        reason = "GPS jump detected: Duplicate timestamp with different location"
+                        if m.id not in existing_invalid_ids:
+                            invalid_records.append(
+                                models.InvalidMeasurement(
+                                    raw_measurement_id=m.id,
+                                    rejection_reason=reason,
+                                )
+                            )
+                            existing_invalid_ids.add(m.id)
+                        logger.warning(
+                            "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
+                            "distance_m={:.2f} time_diff_s={:.2f} speed_mps=undefined",
+                            m.id,
+                            reason,
+                            distance_m,
+                            time_diff_s,
+                        )
+                        # Important: do not move last_valid_point on invalid jump.
+                        continue
+                    # else: time_diff_s == 0 and distance_m == 0 - exact duplicate, skip quietly
+                    # This is likely duplicate data, ignore and continue without validation error
+                
+                # Check for unrealistic speed when time_diff_s > 0
+                elif (distance_m / time_diff_s) > MAX_REALISTIC_SPEED_MPS:
                     invalid_count += 1
                     m.is_valid = False
                     reason = "GPS jump detected: Unrealistic speed"
@@ -404,15 +428,15 @@ def process_batch_task(self, batch_id: str) -> dict:
                             )
                         )
                         existing_invalid_ids.add(m.id)
-                    speed_estimate = None if time_diff_s <= 0 else (distance_m / time_diff_s)
-                    logger.info(
+                    speed_mps = distance_m / time_diff_s
+                    logger.warning(
                         "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
-                        "distance_m={:.2f} time_diff_s={:.2f} speed_mps={}",
+                        "distance_m={:.2f} time_diff_s={:.2f} speed_mps={:.2f}",
                         m.id,
                         reason,
                         distance_m,
                         time_diff_s,
-                        f"{speed_estimate:.2f}" if speed_estimate is not None else "inf",
+                        speed_mps,
                     )
                     # Important: do not move last_valid_point on invalid jump.
                     continue
