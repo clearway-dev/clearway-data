@@ -319,8 +319,6 @@ def process_batch_task(self, batch_id: str) -> dict:
         # Update batch status to 'processing'
         batch.status = 'processing'
         db.flush()
-        
-        logger.info(f"process_batch_task started for batch_id={batch_id}")
 
         # ------------------------------------------------------------------ #
         # LOAD - measurements with session + vehicle eagerly joined
@@ -335,9 +333,7 @@ def process_batch_task(self, batch_id: str) -> dict:
             .all()
         )
 
-        logger.info(
-            f"Batch {batch_id}: loaded {len(measurements)} measurements"
-        )
+        logger.info(f"Worker started processing batch {batch_id} ({len(measurements)} measurements)")
 
         # Pre-load existing invalid IDs to avoid duplicate entries on retry.
         measurement_ids = [m.id for m in measurements]
@@ -370,10 +366,8 @@ def process_batch_task(self, batch_id: str) -> dict:
                         )
                     )
                     existing_invalid_ids.add(m.id)
-                logger.info(
-                    "measurement_evaluation id={} status=invalid stage=logical_validation reason='{}'",
-                    m.id,
-                    reason,
+                logger.debug(
+                    f"Measurement {m.id} rejected at logical validation: {reason}"
                 )
                 continue
 
@@ -443,9 +437,8 @@ def process_batch_task(self, batch_id: str) -> dict:
 
             valid_measurements.append(m)
             last_valid_point = m
-            logger.info(
-                "measurement_evaluation id={} status=valid stage=logical_validation",
-                m.id,
+            logger.debug(
+                f"Measurement {m.id} passed logical validation"
             )
 
         # ------------------------------------------------------------------ #
@@ -494,13 +487,8 @@ def process_batch_task(self, batch_id: str) -> dict:
                     )
                     existing_invalid_ids.add(m.id)
 
-                logger.info(
-                    "measurement_evaluation id={} status=invalid stage=map_matching "
-                    "reason='no road segment within {:.0f} m' lat={:.6f} lon={:.6f}",
-                    m.id,
-                    MAP_MATCH_MAX_DISTANCE_M,
-                    m.latitude,
-                    m.longitude,
+                logger.debug(
+                    f"Measurement {m.id} rejected at map matching: no road segment within {MAP_MATCH_MAX_DISTANCE_M:.0f}m"
                 )
                 continue
 
@@ -540,14 +528,8 @@ def process_batch_task(self, batch_id: str) -> dict:
                 )
             )
 
-            logger.info(
-                "measurement_evaluation id={} status=cleaned stage=post_map_matching_median "
-                "snapped_lat={:.6f} snapped_lon={:.6f} cleaned_width={:.3f} raw_width={:.3f}",
-                m.id,
-                snapped_lat,
-                snapped_lon,
-                filtered_width,
-                item["raw_width"],
+            logger.debug(
+                f"Measurement {m.id} map-matched. Width cleaned: {item['raw_width']:.3f} -> {filtered_width:.3f}"
             )
 
         if cleaned_records:
@@ -564,8 +546,8 @@ def process_batch_task(self, batch_id: str) -> dict:
         db.commit()
 
         logger.info(
-            f"Batch {batch_id} completed - processed={len(measurements)} invalid={invalid_count} "
-            f"cleaned={len(cleaned_records)} unmatched={unmatched_count}"
+            f"Batch {batch_id} completed - processed={len(measurements)} "
+            f"valid/cleaned={len(cleaned_records)} dropped={invalid_count} unmatched={unmatched_count}"
         )
 
         return {
