@@ -308,19 +308,21 @@ def process_batch_task(self, batch_id: str) -> dict:
     db: Session = SessionLocal()
     batch_uuid: uuid.UUID | None = None
     
+    # ====================================================================== #
+    # PHASE 0: IDEMPOTENCE CHECK (separate read-only transaction)
+    # ====================================================================== #
     try:
         batch_uuid = uuid.UUID(batch_id)
         
-        # ------------------------------------------------------------------ #
-        # IDEMPOTENCE CHECK - Skip if already completed
-        # ------------------------------------------------------------------ #
-        batch: models.Batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+        # Read-only check - does not modify data
+        batch_check = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
         
-        if not batch:
+        if not batch_check:
             logger.warning(
                 f"Batch {batch_id} not found in database - will retry "
                 f"(attempt {self.request.retries + 1}/{self.max_retries})"
             )
+            db.close()
             # Raise custom exception to trigger automatic retry
             raise BatchNotFoundError(
                 f"Batch {batch_id} not found in database. "
@@ -328,19 +330,43 @@ def process_batch_task(self, batch_id: str) -> dict:
             )
         
         # IDEMPOTENCE: If batch already completed, skip processing
-        if batch.status == 'completed':
+        if batch_check.status == 'completed':
             logger.info(
                 f"Batch {batch_id} already completed (idempotence check) - skipping duplicate processing"
             )
+            db.close()
             return {
                 "batch_id": batch_id,
                 "status": "completed",
                 "message": "Batch already completed (idempotent retry)",
             }
         
-        # Update batch status to 'processing'
+        db.close()
+        
+    except BatchNotFoundError:
+        raise  # Re-raise to trigger retry
+    except Exception as e:
+        db.close()
+        logger.error(f"Error during idempotence check for batch {batch_id}: {str(e)}")
+        raise
+    
+    # ====================================================================== #
+    # MAIN TRANSACTION: All-or-nothing ACID processing
+    # ====================================================================== #
+    db = SessionLocal()
+    try:
+        # ------------------------------------------------------------------ #
+        # LOAD BATCH and update status to 'processing'
+        # ------------------------------------------------------------------ #
+        batch: models.Batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+        
+        if not batch:
+            # Should not happen after idempotence check, but defensive programming
+            raise BatchNotFoundError(f"Batch {batch_id} disappeared between checks")
+        
+        # Start transaction: update batch status to 'processing'
         batch.status = 'processing'
-        db.flush()
+        # DO NOT commit yet - this is part of the main transaction
 
         # ------------------------------------------------------------------ #
         # LOAD - measurements with session + vehicle eagerly joined
@@ -561,12 +587,22 @@ def process_batch_task(self, batch_id: str) -> dict:
         if invalid_records:
             db.bulk_save_objects(invalid_records)
 
-        # Update batch status to 'completed'
+        # ------------------------------------------------------------------ #
+        # FINAL STEP: Update batch status to 'completed'
+        # ------------------------------------------------------------------ #
         batch.status = 'completed'
         
-        # Single transaction covering all phases
+        # ------------------------------------------------------------------ #
+        # ATOMIC COMMIT: All-or-nothing - single point of persistence
+        # ------------------------------------------------------------------ #
+        # This commits:
+        # 1. batch.status = 'processing' (from start)
+        # 2. All m.is_valid = False updates on RawMeasurement
+        # 3. All InvalidMeasurement inserts (phase 1 + phase 2)
+        # 4. All CleanedMeasurement inserts
+        # 5. batch.status = 'completed' (final state)
         db.commit()
-
+        
         logger.info(
             f"Batch {batch_id} completed - processed={len(measurements)} "
             f"valid/cleaned={len(cleaned_records)} dropped={invalid_count} unmatched={unmatched_count}"
@@ -581,13 +617,23 @@ def process_batch_task(self, batch_id: str) -> dict:
             "unmatched": unmatched_count,
             "message": "Batch processing completed successfully",
         }
+        
     except BatchNotFoundError:
-        # Let Celery handle the retry automatically
+        # ------------------------------------------------------------------ #
+        # ROLLBACK on race condition - let Celery retry
+        # ------------------------------------------------------------------ #
+        logger.warning(f"Batch {batch_id} not found during processing - rolling back transaction")
         db.rollback()
         db.close()
-        raise
+        raise  # Re-raise to trigger Celery automatic retry
+        
     except Exception as e:
-        db.rollback()
+        # ------------------------------------------------------------------ #
+        # ROLLBACK on ANY error - restore database to clean state
+        # ------------------------------------------------------------------ #
+        logger.error(f"Error during batch {batch_id} processing: {str(e)} - rolling back all changes")
+        db.rollback()  # CRITICAL: Undo ALL changes in this transaction
+        db.close()
         
         # ------------------------------------------------------------------ #
         # AUTO-RETRY logic for transient errors (e.g., DB connection issues)
@@ -597,7 +643,6 @@ def process_batch_task(self, batch_id: str) -> dict:
             logger.warning(
                 f"Batch {batch_id} encountered error (attempt {self.request.retries + 1}/3): {str(e)} - will retry in 60s"
             )
-            db.close()
             # Retry with 60 second countdown
             raise self.retry(exc=e, countdown=60, max_retries=3)
         
@@ -609,23 +654,22 @@ def process_batch_task(self, batch_id: str) -> dict:
         )
         
         # Mark batch as 'failed' in database to prevent infinite retries
+        # IMPORTANT: This is a NEW, SEPARATE transaction (previous one was rolled back)
         if batch_uuid is not None:
+            db_fail = SessionLocal()  # Fresh session for failure logging
             try:
-                # Refresh database connection in case it's stale
-                db.close()
-                db = SessionLocal()
-                
-                failed_batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+                failed_batch = db_fail.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
                 if failed_batch:
                     failed_batch.status = 'failed'
-                    db.commit()
-                    logger.info(f"Batch {batch_id} marked as 'failed' in database")
+                    db_fail.commit()  # Separate transaction for failure marker
+                    logger.info(f"Batch {batch_id} marked as 'failed' in database (separate transaction)")
                 else:
                     logger.warning(f"Could not find batch {batch_id} to mark as failed")
             except Exception as commit_error:
                 logger.error(f"Failed to update batch {batch_id} status to 'failed': {str(commit_error)}")
+                db_fail.rollback()
             finally:
-                db.close()
+                db_fail.close()
         else:
             logger.warning(f"Cannot mark batch as failed - batch_uuid not parsed from {batch_id}")
         
@@ -634,7 +678,11 @@ def process_batch_task(self, batch_id: str) -> dict:
         
         # Re-raise the original exception to mark task as failed in Celery
         raise
+        
     finally:
+        # ------------------------------------------------------------------ #
+        # CLEANUP: Ensure session is always closed
+        # ------------------------------------------------------------------ #
         try:
             db.close()
         except Exception:
