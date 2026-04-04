@@ -37,6 +37,98 @@ app = FastAPI(
 
 
 # ==============================================
+# MIDDLEWARE CONFIGURATION
+# ==============================================
+
+# CORS Middleware - Povolení všech originů pro vývoj/PoC
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Pro vývoj - v produkci použít konkrétní domény
+    allow_credentials=True,
+    allow_methods=["*"],  # GET, POST, PUT, DELETE, PATCH, OPTIONS
+    allow_headers=["*"],  # Všechny hlavičky
+    max_age=3600,  # Preflight cache - 1 hodina
+)
+
+logger.info("CORS Middleware aktivován - allow_origins=['*'] (development mode)")
+
+
+# Request Logging Middleware - Production-grade logging with path filtering
+# Paths to ignore from standard logging (health checks, docs, static assets)
+IGNORED_PATHS = {
+    "/health",
+    "/",
+    "/metrics",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/favicon.ico",
+}
+
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    """
+    Production-grade request logging middleware with intelligent filtering.
+    
+    Features:
+    - Path filtering: Health checks and docs logged only at DEBUG level
+    - Dynamic log levels based on HTTP status codes:
+      * < 400 (Success): DEBUG level (endpoints already log their own INFO)
+      * 400-499 (Client errors): WARNING level
+      * >= 500 (Server errors): ERROR level
+    - Exception handling with ERROR level logging
+    - Performance measurement and client IP tracking
+    """
+    start_time = time.time()
+    client_ip = request.client.host if request.client else "unknown"
+    path = request.url.path
+    
+    try:
+        # Process request
+        response = await call_next(request)
+        status_code = response.status_code
+        
+    except Exception as e:
+        # Server exception - always log as ERROR
+        duration = time.time() - start_time
+        logger.error(
+            f"{request.method} {path} - "
+            f"Status: 500 - Duration: {duration:.3f}s - "
+            f"Client: {client_ip} - Error: {str(e)}"
+        )
+        raise  # Re-raise for FastAPI's exception handlers
+    
+    # Calculate duration
+    duration = time.time() - start_time
+    
+    # Build log message
+    log_msg = (
+        f"{request.method} {path} - "
+        f"Status: {status_code} - Duration: {duration:.3f}s - "
+        f"Client: {client_ip}"
+    )
+    
+    # Apply path filtering - health/docs endpoints only at DEBUG
+    if path in IGNORED_PATHS:
+        logger.debug(log_msg)
+        return response
+    
+    # Dynamic log level based on status code
+    if status_code < 400:
+        # Success/Redirection - use DEBUG (endpoints already log INFO)
+        logger.debug(log_msg)
+    elif status_code < 500:
+        # Client errors (400-499) - use WARNING
+        logger.warning(log_msg)
+    else:
+        # Server errors (500+) - use ERROR
+        logger.error(log_msg)
+    
+    return response
+
+
+# ==============================================
 # HEALTH CHECK ENDPOINTS
 # ==============================================
 
