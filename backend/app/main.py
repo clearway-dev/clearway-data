@@ -11,11 +11,19 @@ from loguru import logger
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from prometheus_fastapi_instrumentator import Instrumentator
 from . import models, schemas
 from .worker import process_batch_task
 from .database import get_db, engine, Base
 from .routers import auth
 from .routers.auth import get_current_active_user, require_admin
+# Import shared Prometheus metrics from dedicated module (avoid circular imports)
+from .metrics import (
+    batches_received_total,
+    invalid_measurements_total,
+    batch_size_measurements,
+    active_sessions
+)
 
 # Configure Loguru for FastAPI process
 os.makedirs("/app/logs", exist_ok=True)
@@ -34,6 +42,17 @@ app = FastAPI(
     version="0.1.0",
     description="API for road width measurement data collection and processing"
 )
+
+
+# ==============================================
+# PROMETHEUS INSTRUMENTATION
+# ==============================================
+
+# Automatická instrumentace FastAPI s Prometheus metrikami
+# Vytvoří endpoint /metrics pro scraping Prometheus serverem
+Instrumentator().instrument(app).expose(app)
+
+logger.info("Prometheus instrumentace aktivována - endpoint dostupný na /metrics")
 
 
 # ==============================================
@@ -471,6 +490,12 @@ async def ingest_batch_measurements(
         
         batch_id = new_batch.id
         logger.debug(f"Created batch {batch_id} for session {payload.session_id}")
+        
+        # ✅ PROMETHEUS: Increment batch counter (status=pending)
+        batches_received_total.labels(status="pending").inc()
+        
+        # ✅ PROMETHEUS: Record batch size distribution
+        batch_size_measurements.observe(total_received)
         
         # 3. Prepare measurements with batch_id FK
         measurements_to_insert = []

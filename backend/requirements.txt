@@ -1,8 +1,8 @@
 # --- Jádro aplikace (API a Validace) ---
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.6
+pydantic-settings==2.7.1
 python-dotenv==1.0.0
 
 # --- Databáze a Migrace ---
@@ -23,6 +23,11 @@ redis==5.0.1            # Klient pro Redis (slouží jako message broker pro Cel
 
 # --- Logování ---
 loguru==0.7.2
+
+# --- Monitoring a Metriky (Prometheus + Grafana) ---
+prometheus-fastapi-instrumentator==7.0.0  # Automatická instrumentace FastAPI s Prometheus
+prometheus-client==0.20.0                  # Vytváření custom metrik (Counter, Gauge, Histogram)
+flower==2.0.1                              # Celery monitoring UI s Prometheus exportem
 
 # --- Autentizace a Bezpečnost ---
 passlib[bcrypt]==1.7.4      # Hashování hesel (bcrypt)

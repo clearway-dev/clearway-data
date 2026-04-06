@@ -25,6 +25,13 @@ from sqlalchemy.orm import Session
 from . import models
 from .database import SessionLocal
 
+# ==============================================
+# PROMETHEUS CUSTOM METRICS (shared with main.py)
+# ==============================================
+
+# Import metrics from dedicated metrics module (avoids circular imports)
+from .metrics import invalid_measurements_total, batches_received_total
+
 
 class BatchNotFoundError(Exception):
     """Custom exception raised when batch is not found in database.
@@ -414,6 +421,10 @@ def process_batch_task(self, batch_id: str) -> dict:
                         )
                     )
                     existing_invalid_ids.add(m.id)
+                    
+                    # ✅ PROMETHEUS: Track invalid measurements by reason category
+                    invalid_measurements_total.labels(reason="logical_validation").inc()
+                    
                 logger.debug(
                     f"Measurement {m.id} rejected at logical validation: {reason}"
                 )
@@ -444,6 +455,10 @@ def process_batch_task(self, batch_id: str) -> dict:
                                 )
                             )
                             existing_invalid_ids.add(m.id)
+                            
+                            # ✅ PROMETHEUS: Track GPS jump (duplicate timestamp)
+                            invalid_measurements_total.labels(reason="gps_jump_duplicate_timestamp").inc()
+                            
                         logger.warning(
                             "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
                             "distance_m={:.2f} time_diff_s={:.2f} speed_mps=undefined",
@@ -470,6 +485,10 @@ def process_batch_task(self, batch_id: str) -> dict:
                             )
                         )
                         existing_invalid_ids.add(m.id)
+                        
+                        # ✅ PROMETHEUS: Track GPS jump (unrealistic speed)
+                        invalid_measurements_total.labels(reason="gps_jump_unrealistic_speed").inc()
+                        
                     speed_mps = distance_m / time_diff_s
                     logger.warning(
                         "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
@@ -534,6 +553,9 @@ def process_batch_task(self, batch_id: str) -> dict:
                         )
                     )
                     existing_invalid_ids.add(m.id)
+                    
+                    # ✅ PROMETHEUS: Track map-matching failures
+                    invalid_measurements_total.labels(reason="map_matching_failed").inc()
 
                 logger.debug(
                     f"Measurement {m.id} rejected at map matching: no road segment within {MAP_MATCH_MAX_DISTANCE_M:.0f}m"
@@ -603,6 +625,9 @@ def process_batch_task(self, batch_id: str) -> dict:
         # 5. batch.status = 'completed' (final state)
         db.commit()
         
+        # ✅ PROMETHEUS: Update batch status counter (completed)
+        batches_received_total.labels(status="completed").inc()
+        
         logger.info(
             f"Batch {batch_id} completed - processed={len(measurements)} "
             f"valid/cleaned={len(cleaned_records)} dropped={invalid_count} unmatched={unmatched_count}"
@@ -662,6 +687,10 @@ def process_batch_task(self, batch_id: str) -> dict:
                 if failed_batch:
                     failed_batch.status = 'failed'
                     db_fail.commit()  # Separate transaction for failure marker
+                    
+                    # ✅ PROMETHEUS: Update batch status counter (failed)
+                    batches_received_total.labels(status="failed").inc()
+                    
                     logger.info(f"Batch {batch_id} marked as 'failed' in database (separate transaction)")
                 else:
                     logger.warning(f"Could not find batch {batch_id} to mark as failed")
