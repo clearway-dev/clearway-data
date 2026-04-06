@@ -52,9 +52,10 @@ services:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
       CELERY_BROKER_URL: redis://clearway-redis:6379/0
       CELERY_RESULT_BACKEND: redis://clearway-redis:6379/0
+      WORKER_METRICS_PORT: 8001
     env_file:
       - .env
-    command: celery -A app.worker.celery_app worker --loglevel=info
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
     restart: unless-stopped
     depends_on:
       - redis

@@ -23,6 +23,43 @@
   "liveNow": false,
   "panels": [
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 16,
+      "panels": [],
+      "title": "API",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 11,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "# Backend API",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.2.2",
+      "type": "text"
+    },
+    {
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -79,17 +116,18 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 12,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 3
       },
       "id": 1,
       "options": {
         "legend": {
           "calcs": [
             "last",
-            "mean"
+            "mean",
+            "max"
           ],
           "displayMode": "table",
           "placement": "bottom",
@@ -106,8 +144,10 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
+          "editorMode": "code",
           "expr": "rate(http_requests_total{job=\"clearway-fastapi\"}[5m])",
-          "legendFormat": "{{method}} {{handler}}",
+          "legendFormat": "{{method}} {{handler}} [{{status}}]",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -147,10 +187,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 12,
         "w": 12,
         "x": 12,
-        "y": 0
+        "y": 3
       },
       "id": 2,
       "options": {
@@ -174,13 +214,52 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"clearway-fastapi\"}[5m]))",
-          "legendFormat": "p95 latency",
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"clearway-fastapi\"}[5m])))",
+          "legendFormat": "__auto",
+          "range": true,
           "refId": "A"
         }
       ],
       "title": "FastAPI P95 Latency",
       "type": "gauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "id": 15,
+      "panels": [],
+      "title": "Celery Worker",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 14,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "# Celery Worker\n\n",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.2.2",
+      "type": "text"
     },
     {
       "datasource": {
@@ -288,16 +367,15 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 18
       },
       "id": 3,
       "options": {
         "legend": {
           "calcs": [
-            "last",
-            "sum"
+            "last"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -312,8 +390,10 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "clearway_batches_received_total",
-          "legendFormat": "{{status}}",
+          "editorMode": "code",
+          "expr": "sum by (status) (clearway_batches_received_total)",
+          "legendFormat": "__auto",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -363,6 +443,7 @@
             }
           },
           "mappings": [],
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -377,10 +458,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 12,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 18
       },
       "id": 4,
       "options": {
@@ -404,8 +485,10 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "clearway_invalid_measurements_total",
+          "editorMode": "code",
+          "expr": "sum by (reason) (clearway_invalid_measurements_total{job=\"clearway-worker\"})",
           "legendFormat": "{{reason}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -448,7 +531,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 16
+        "y": 26
       },
       "id": 5,
       "options": {
@@ -458,7 +541,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "last"
           ],
           "fields": "",
           "values": false
@@ -473,8 +556,10 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "flower_worker_online{job=\"clearway-celery\"}",
-          "legendFormat": "Online Workers",
+          "editorMode": "code",
+          "expr": "sum(flower_worker_online{job=\"clearway-celery\"}) OR vector(0)",
+          "legendFormat": "__auto",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -517,7 +602,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 16
+        "y": 26
       },
       "id": 6,
       "options": {
@@ -542,13 +627,52 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "flower_task_queue_length{job=\"clearway-celery\"}",
+          "editorMode": "code",
+          "expr": "sum(flower_task_queue_length{job=\"clearway-celery\"}) OR vector(0)",
           "legendFormat": "Queue Depth",
+          "range": true,
           "refId": "A"
         }
       ],
       "title": "Celery Queue Depth",
       "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "id": 13,
+      "panels": [],
+      "title": "Database",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "id": 17,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": " # Database",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.2.2",
+      "type": "text"
     },
     {
       "datasource": {
@@ -583,16 +707,17 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 16
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 33
       },
       "id": 7,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -601,8 +726,8 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto",
-        "wideLayout": true
+        "showUnfilled": true,
+        "valueMode": "color"
       },
       "pluginVersion": "10.2.2",
       "targets": [
@@ -611,13 +736,15 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "pg_stat_activity_count{job=\"clearway-postgres\"}",
-          "legendFormat": "Active Connections",
+          "editorMode": "code",
+          "expr": "sum by (state) (pg_stat_activity_count{job=\"clearway-postgres\"})",
+          "legendFormat": "{{state}}",
+          "range": true,
           "refId": "A"
         }
       ],
       "title": "PostgreSQL Active Connections",
-      "type": "stat"
+      "type": "bargauge"
     },
     {
       "datasource": {
@@ -648,10 +775,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 16
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 33
       },
       "id": 8,
       "options": {
@@ -676,8 +803,10 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(pg_stat_database_blks_hit{job=\"clearway-postgres\"}[5m]) / (rate(pg_stat_database_blks_hit{job=\"clearway-postgres\"}[5m]) + rate(pg_stat_database_blks_read{job=\"clearway-postgres\"}[5m]))",
+          "editorMode": "code",
+          "expr": "rate(pg_stat_database_blks_hit{job=\"clearway-postgres\", datname=\"clearway\"}[5m]) / (rate(pg_stat_database_blks_hit{job=\"clearway-postgres\", datname=\"clearway\"}[5m]) + rate(pg_stat_database_blks_read{job=\"clearway-postgres\", datname=\"clearway\"}[5m]))",
           "legendFormat": "Cache Hit Ratio",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -736,15 +865,15 @@
               }
             ]
           },
-          "unit": "bytes"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 12,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 39
       },
       "id": 9,
       "options": {
@@ -768,8 +897,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "pg_stat_user_tables_n_live_tup{job=\"clearway-postgres\"} * avg(pg_stat_user_tables_avg_width{job=\"clearway-postgres\"})",
+          "editorMode": "code",
+          "expr": "pg_stat_user_tables_n_live_tup{job=\"clearway-postgres\"}",
+          "format": "time_series",
           "legendFormat": "{{relname}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -833,10 +965,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 12,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 39
       },
       "id": 10,
       "options": {
@@ -867,6 +999,18 @@
       ],
       "title": "PostgreSQL Slow Query Indicator (Sequential Scans)",
       "type": "timeseries"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "id": 12,
+      "panels": [],
+      "type": "row"
     }
   ],
   "refresh": "10s",
@@ -880,7 +1024,7 @@
     "list": [
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "Prometheus",
           "value": "PBFA97CFB590B2093"
         },
@@ -899,13 +1043,13 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "ClearWay - Single Pane of Glass (Diplomka)",
   "uid": "clearway-main-dashboard",
-  "version": 4,
+  "version": 18,
   "weekStart": ""
 }

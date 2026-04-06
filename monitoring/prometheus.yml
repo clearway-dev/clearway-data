@@ -25,6 +25,15 @@ scrape_configs:
       - targets: ['flower:5555']  # Docker service name + port
     metrics_path: '/metrics'  # Flower exposes Prometheus metrics on /metrics
     scrape_interval: 15s
+
+  # ============================================================================
+  # Celery Worker Custom Metrics
+  # ============================================================================
+  - job_name: 'clearway-worker'
+    static_configs:
+      - targets: ['celery_worker:8001']  # Celery worker process metrics endpoint
+    metrics_path: '/metrics'
+    scrape_interval: 15s
     
   # ============================================================================
   # PostgreSQL Database Metrics

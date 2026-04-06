@@ -17,6 +17,7 @@ from celery import Celery
 from celery.signals import worker_process_init
 from geoalchemy2.shape import from_shape
 from loguru import logger
+from prometheus_client import start_http_server
 from scipy.signal import medfilt
 from shapely.geometry import Point
 from sqlalchemy import text
@@ -43,6 +44,9 @@ class BatchNotFoundError(Exception):
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://clearway-redis:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://clearway-redis:6379/0")
+WORKER_METRICS_PORT = int(os.getenv("WORKER_METRICS_PORT", "8001"))
+
+_worker_metrics_server_started = False
 
 # Maximum distance in metres for snapping a GPS point to a road segment.
 MAP_MATCH_MAX_DISTANCE_M = 50.0
@@ -60,6 +64,8 @@ celery_app = Celery(
 
 @worker_process_init.connect
 def setup_worker_logger(**kwargs):
+    global _worker_metrics_server_started
+
     os.makedirs("/app/logs", exist_ok=True)
     logger.remove()
     logger.add(
@@ -68,6 +74,21 @@ def setup_worker_logger(**kwargs):
         retention="7 days",
         level="INFO",
     )
+
+    # Expose worker-local Prometheus metrics for scraping by Prometheus.
+    # With current compose setup worker runs with concurrency=1, so a single
+    # task process owns counters and exposes them on one endpoint.
+    if not _worker_metrics_server_started:
+        try:
+            start_http_server(WORKER_METRICS_PORT)
+            _worker_metrics_server_started = True
+            logger.info(
+                f"Celery worker metrics endpoint started on :{WORKER_METRICS_PORT}/metrics"
+            )
+        except OSError as exc:
+            logger.warning(
+                f"Celery worker metrics endpoint could not start on :{WORKER_METRICS_PORT}: {exc}"
+            )
 
 
 # --------------------------------------------------------------------------- #
