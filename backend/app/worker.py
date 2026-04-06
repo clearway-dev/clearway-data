@@ -134,26 +134,16 @@ def _map_match(
         text(
             """
             SELECT
-                ST_Y(ST_ClosestPoint(rs.geom,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lat,
-                ST_X(ST_ClosestPoint(rs.geom,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lon,
-                degrees(ST_Azimuth(
-                    ST_StartPoint(rs.geom),
-                    ST_EndPoint(rs.geom)
-                )) AS road_heading,
-                ST_Distance(
-                    rs.geom::geography,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
-                ) AS distance
+                ST_Y(ST_ClosestPoint(rs.geom, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lat,
+                ST_X(ST_ClosestPoint(rs.geom, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lon,
+                degrees(ST_Azimuth(ST_StartPoint(rs.geom), ST_EndPoint(rs.geom))) AS road_heading,
+                ST_Distance(rs.geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) AS distance
             FROM road_segments rs
-            WHERE ST_DWithin(
-                rs.geom::geography,
-                ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
-                :max_dist
-            )
-            ORDER BY distance
-            LIMIT 3
+            -- Nejprve pomocí rychlého indexu ořízneme hledání na malý čtvereček (cca odpovídá tvému max_dist)
+            WHERE rs.geom && ST_Expand(ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :max_dist / 111320.0) 
+            -- Následně seřadíme podle skutečné geometrické vzdálenosti pomocí bleskového operátoru <->
+            ORDER BY rs.geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
+            LIMIT 3;
             """
         ),
         {"lat": lat, "lon": lon, "max_dist": max_distance_m},
