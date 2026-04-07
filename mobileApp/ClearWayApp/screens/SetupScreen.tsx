@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { CustomHeader } from '../components/ui/CustomHeader';
 import { ApiService } from '../services/api.service';
+import { SessionStorageService } from '../services/session-storage.service';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Vehicle, Sensor } from '../types/navigation';
 import { UIConfig } from '../config/ui.config';
@@ -40,25 +41,38 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
     selectedVehicleId === sessionVehicleId && 
     selectedSensorId === sessionSensorId;
 
-  // Load data from API
+  // Load data from API and storage
   useEffect(() => {
     const initialize = async () => {
       try {
-        // Load vehicles and sensors (database is already initialized in App.tsx)
-        const [vehiclesData, sensorsData] = await Promise.all([
+        // Load vehicles, sensors and last session in parallel
+        const [vehiclesData, sensorsData, savedSession] = await Promise.all([
           ApiService.getVehicles(),
           ApiService.getSensors(),
+          SessionStorageService.loadSession(),
         ]);
         
         setVehicles(vehiclesData);
         setSensors(sensorsData);
         
-        // Auto-select first vehicle and sensor if available
-        if (vehiclesData.length > 0) {
-          setSelectedVehicleId(vehiclesData[0].id);
-        }
-        if (sensorsData.length > 0) {
-          setSelectedSensorId(sensorsData[0].id);
+        // If we have a saved session, restore it
+        if (savedSession) {
+          setSessionId(savedSession.sessionId);
+          setSessionVehicleId(savedSession.vehicleId);
+          setSessionSensorId(savedSession.sensorId);
+          
+          // Pre-select the values from the session
+          setSelectedVehicleId(savedSession.vehicleId);
+          setSelectedSensorId(savedSession.sensorId);
+          console.log('✓ Restored session from storage:', savedSession.sessionId);
+        } else {
+          // Otherwise auto-select first vehicle and sensor if available
+          if (vehiclesData.length > 0) {
+            setSelectedVehicleId(vehiclesData[0].id);
+          }
+          if (sensorsData.length > 0) {
+            setSelectedSensorId(sensorsData[0].id);
+          }
         }
         
         setIsInitialized(true);
@@ -118,7 +132,11 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
       setSessionId(session.id);
       setSessionVehicleId(selectedVehicleId);
       setSessionSensorId(selectedSensorId);
-      console.log('✓ New session created:', session.id);
+      
+      // Save to storage
+      await SessionStorageService.saveSession(session.id, selectedVehicleId, selectedSensorId);
+      
+      console.log('✓ New session created and saved:', session.id);
     } catch (error) {
       console.error('Failed to create session:', error);
       setSessionId(null);
@@ -128,11 +146,14 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handleStartMeasurement = () => {
+  const handleStartMeasurement = async () => {
     if (!sessionId || !selectedVehicleId || !selectedSensorId) {
       Alert.alert('Chyba', 'Nejprve vyberte vozidlo a senzor');
       return;
     }
+
+    // Double check it's saved (should be already, but for safety)
+    await SessionStorageService.saveSession(sessionId, selectedVehicleId, selectedSensorId);
 
     navigation.navigate('Measurement', {
       sessionId,
