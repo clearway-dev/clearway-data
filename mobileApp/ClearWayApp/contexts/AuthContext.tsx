@@ -51,9 +51,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           isAuthenticated: true,
         });
       } catch (error) {
-        // Token is invalid or expired
-        console.error('Token validation failed:', error);
-        await AuthService.clearToken();
+        // Expired token is an expected state transition to logged-out.
+        if (AuthService.isTokenExpiredError(error)) {
+          console.log('ℹ️ Session expired, redirecting to login');
+        } else {
+          console.warn('Token validation failed:', error);
+          await AuthService.clearToken();
+        }
         setAuthState({
           user: null,
           token: null,

@@ -4,9 +4,14 @@ import { User, LoginRequest, AuthResponse } from '../types';
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
 const API_PREFIX = '/api';
 const TOKEN_KEY = 'auth_token';
+const TOKEN_EXPIRED_ERROR = 'Token expired';
 
 export class AuthService {
   private static token: string | null = null;
+
+  static isTokenExpiredError(error: unknown): boolean {
+    return error instanceof Error && error.message === TOKEN_EXPIRED_ERROR;
+  }
 
   /**
    * Login with email and password
@@ -98,7 +103,7 @@ export class AuthService {
         if (response.status === 401) {
           // Token is invalid or expired
           await this.clearToken();
-          throw new Error('Token expired');
+          throw new Error(TOKEN_EXPIRED_ERROR);
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -107,7 +112,11 @@ export class AuthService {
       console.log('✓ User profile loaded:', user.email);
       return user;
     } catch (error) {
-      console.error('Failed to fetch current user:', error);
+      if (this.isTokenExpiredError(error)) {
+        console.log('ℹ️ Token expired, user needs to login again');
+      } else {
+        console.error('Failed to fetch current user:', error);
+      }
       throw error;
     }
   }

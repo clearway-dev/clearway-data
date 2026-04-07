@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { SyncService } from '../services/sync.service';
 import { SyncStatus } from '../types/navigation';
@@ -6,9 +6,15 @@ import { SyncStatus } from '../types/navigation';
 export const BackendStatusBar: React.FC = () => {
   const [status, setStatus] = useState<SyncStatus>({ status: 'idle' });
   const [fadeAnim] = useState(new Animated.Value(0));
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const unsubscribe = SyncService.subscribe((newStatus) => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = null;
+      }
+
       setStatus(newStatus);
 
       // Show bar with fade in
@@ -25,13 +31,25 @@ export const BackendStatusBar: React.FC = () => {
           duration: 300,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(({ finished }) => {
+        // Unmount after hide to avoid invisible absolute overlay staying in the tree.
+        if (finished) {
+          hideTimeoutRef.current = setTimeout(() => {
+            setStatus({ status: 'idle' });
+            hideTimeoutRef.current = null;
+          }, 0);
+        }
+      });
     });
 
     return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+      fadeAnim.stopAnimation();
       unsubscribe();
     };
-  }, []);
+  }, [fadeAnim]);
 
   if (status.status === 'idle') {
     return null;
@@ -65,6 +83,7 @@ export const BackendStatusBar: React.FC = () => {
 
   return (
     <Animated.View
+      pointerEvents="none"
       style={[
         styles.container,
         getStatusStyle(),
