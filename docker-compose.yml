@@ -111,6 +111,21 @@ services:
       - clearway-network
 
   # ---------------------------------------------------------------------------
+  # CADVISOR SERVICE (Container CPU/RAM metrics for Prometheus)
+  # ---------------------------------------------------------------------------
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: clearway-cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+    networks:
+      - clearway-network
+
+  # ---------------------------------------------------------------------------
   # GRAFANA SERVICE (Metrics visualization and dashboards)
   # ---------------------------------------------------------------------------
   grafana:

@@ -43,6 +43,15 @@ scrape_configs:
       - targets: ['postgres_exporter:9187']  # Docker service name + port
     metrics_path: '/metrics'
     scrape_interval: 30s  # DB metrics change less frequently
+
+  # ============================================================================
+  # Container Infrastructure Metrics via cAdvisor
+  # ============================================================================
+  - job_name: 'clearway-cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']  # Docker service name + cAdvisor port
+    metrics_path: '/metrics'
+    scrape_interval: 15s
     
   # ============================================================================
   # Prometheus Self-Monitoring
