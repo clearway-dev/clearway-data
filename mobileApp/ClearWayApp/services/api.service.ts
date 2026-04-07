@@ -1,5 +1,6 @@
 import { MeasurementBatch, Vehicle, Sensor, Session, CreateVehicleRequest, CreateSensorRequest } from '../types';
 import { AuthService } from './auth.service';
+import { ApiConfig } from '../config/api.config';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
 const API_PREFIX = '/api';
@@ -63,7 +64,7 @@ export class ApiService {
     try {
       console.log('🔄 Fetching vehicles from:', `${API_BASE_URL}${API_PREFIX}/vehicles`);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const timeoutId = setTimeout(() => controller.abort(), ApiConfig.DEFAULT_TIMEOUT_MS);
       
       const authHeaders = await this.getAuthHeaders();
     
@@ -100,7 +101,7 @@ export class ApiService {
     try {
       console.log('🔄 Fetching sensors from:', `${API_BASE_URL}${API_PREFIX}/sensors`);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const timeoutId = setTimeout(() => controller.abort(), ApiConfig.DEFAULT_TIMEOUT_MS);
       
       const authHeaders = await this.getAuthHeaders();
       
@@ -136,7 +137,7 @@ export class ApiService {
   static async createSession(vehicleId: string, sensorId: string): Promise<Session> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const timeoutId = setTimeout(() => controller.abort(), ApiConfig.DEFAULT_TIMEOUT_MS);
       
       const authHeaders = await this.getAuthHeaders();
       
@@ -178,7 +179,7 @@ export class ApiService {
   static async sendBatch(batch: MeasurementBatch): Promise<void> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for batch
+      const timeoutId = setTimeout(() => controller.abort(), ApiConfig.BATCH_TIMEOUT_MS);
       
       const authHeaders = await this.getAuthHeaders();
       

@@ -14,6 +14,8 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { ApiService } from '../services/api.service';
+import { CustomHeader } from '../components/ui/CustomHeader';
+import { UIConfig } from '../config/ui.config';
 
 type AdminScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Admin'>;
 
@@ -171,23 +173,15 @@ export const AdminScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <CustomHeader variant="back" onBack={() => navigation.goBack()} title="Admin Panel" />
+      
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <Text style={styles.backButtonText}>← Zpět</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Admin Panel</Text>
-        </View>
 
         {/* Vehicle Section */}
         <View style={styles.section}>
@@ -307,90 +301,74 @@ export const AdminScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: UIConfig.colors.background,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingTop: 50,
-  },
-  header: {
-    marginBottom: 30,
-  },
-  backButton: {
-    marginBottom: 15,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#3b82f6',
-    fontWeight: '600',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#18181b',
+    padding: UIConfig.spacing.xl,
   },
   section: {
-    marginBottom: 40,
-    padding: 20,
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
+    marginBottom: UIConfig.spacing.xxxl,
+    padding: UIConfig.spacing.xl,
+    backgroundColor: UIConfig.colors.muted,
+    borderRadius: UIConfig.borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: UIConfig.colors.border,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: UIConfig.fontSize.lg,
     fontWeight: '600',
-    color: '#18181b',
-    marginBottom: 20,
+    color: UIConfig.colors.foreground,
+    marginBottom: UIConfig.spacing.xl,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: UIConfig.spacing.xl,
   },
   label: {
-    fontSize: 14,
+    fontSize: UIConfig.fontSize.sm,
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
+    color: UIConfig.colors.foreground,
+    marginBottom: UIConfig.spacing.sm,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: UIConfig.colors.background,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#18181b',
+    borderColor: UIConfig.colors.input,
+    borderRadius: UIConfig.borderRadius.md,
+    paddingHorizontal: UIConfig.spacing.lg,
+    paddingVertical: UIConfig.spacing.md,
+    fontSize: UIConfig.fontSize.md,
+    color: UIConfig.colors.foreground,
   },
   inputError: {
-    borderColor: '#dc2626',
+    borderColor: UIConfig.colors.destructive,
   },
   errorText: {
-    fontSize: 12,
-    color: '#dc2626',
-    marginTop: 4,
+    fontSize: UIConfig.fontSize.xs,
+    color: UIConfig.colors.destructive,
+    marginTop: UIConfig.spacing.xs,
   },
   helperText: {
-    fontSize: 12,
-    color: '#71717a',
-    marginTop: 4,
+    fontSize: UIConfig.fontSize.xs,
+    color: UIConfig.colors.mutedForeground,
+    marginTop: UIConfig.spacing.xs,
   },
   submitButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 8,
-    paddingVertical: 14,
+    backgroundColor: UIConfig.colors.primary,
+    borderRadius: UIConfig.borderRadius.md,
+    paddingVertical: UIConfig.fontSize.sm,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: UIConfig.spacing.md,
+    minHeight: UIConfig.button.minHeight,
   },
   submitButtonDisabled: {
-    backgroundColor: '#cbd5e1',
+    backgroundColor: UIConfig.colors.muted,
   },
   submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: UIConfig.colors.primaryForeground,
+    fontSize: UIConfig.fontSize.md,
     fontWeight: '600',
   },
 });

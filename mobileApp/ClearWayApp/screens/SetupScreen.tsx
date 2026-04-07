@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CustomHeader } from '../components/ui/CustomHeader';
 import { ApiService } from '../services/api.service';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Vehicle, Sensor } from '../types/navigation';
+import { UIConfig } from '../config/ui.config';
 
 type SetupScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Setup'>;
 
@@ -156,14 +158,10 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
   const canStartMeasurement = !isLoading && sessionId && !configurationChanged;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Close Button */}
-      <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-        <Text style={styles.closeButtonText}>✕</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>Nastavení měření</Text>
-
+    <View style={styles.container}>
+      <CustomHeader variant="close" onClose={handleClose} title="Nastavení měření" />
+      
+      <ScrollView contentContainerStyle={styles.content}>
       {/* Vehicle Selection */}
       <Card style={styles.card}>
         <Text style={styles.label}>Vozidlo:</Text>
@@ -258,44 +256,21 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
           Konfigurace se změnila. Vygenerujte novou jízdu pro pokračování.
         </Text>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
+    backgroundColor: UIConfig.colors.background,
   },
   content: {
-    padding: 20,
-    paddingTop: 60,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#e4e4e7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  closeButtonText: {
-    fontSize: 24,
-    color: '#18181b',
-    fontWeight: '300',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 24,
-    color: '#18181b',
+    padding: UIConfig.spacing.xl,
   },
   card: {
-    marginBottom: 16,
+    marginBottom: UIConfig.spacing.lg,
   },
   successCard: {
     backgroundColor: '#f0fdf4',
@@ -306,54 +281,54 @@ const styles = StyleSheet.create({
     borderColor: '#fbbf24',
   },
   label: {
-    fontSize: 14,
+    fontSize: UIConfig.fontSize.sm,
     fontWeight: '500',
-    color: '#71717a',
-    marginBottom: 8,
+    color: UIConfig.colors.mutedForeground,
+    marginBottom: UIConfig.spacing.sm,
   },
   sessionId: {
-    fontSize: 14,
-    color: '#18181b',
+    fontSize: UIConfig.fontSize.sm,
+    color: UIConfig.colors.foreground,
     fontFamily: 'monospace',
-    marginBottom: 8,
+    marginBottom: UIConfig.spacing.sm,
   },
   successText: {
-    fontSize: 14,
+    fontSize: UIConfig.fontSize.sm,
     color: '#16a34a',
     fontWeight: '500',
   },
   warningText: {
-    fontSize: 14,
+    fontSize: UIConfig.fontSize.sm,
     color: '#d97706',
     fontWeight: '500',
   },
   errorText: {
-    color: '#dc2626',
-    fontSize: 14,
+    color: UIConfig.colors.destructive,
+    fontSize: UIConfig.fontSize.sm,
   },
   infoText: {
-    fontSize: 14,
-    color: '#71717a',
-    marginTop: 8,
+    fontSize: UIConfig.fontSize.sm,
+    color: UIConfig.colors.mutedForeground,
+    marginTop: UIConfig.spacing.sm,
     textAlign: 'center',
   },
   createSessionButton: {
-    marginTop: 8,
-    marginBottom: 16,
-    paddingVertical: 12,
+    marginTop: UIConfig.spacing.sm,
+    marginBottom: UIConfig.spacing.lg,
+    paddingVertical: UIConfig.spacing.md,
   },
   startButton: {
-    marginTop: 24,
-    paddingVertical: 16,
+    marginTop: UIConfig.spacing.xl,
+    paddingVertical: UIConfig.spacing.lg,
   },
   hintText: {
-    fontSize: 14,
-    color: '#71717a',
+    fontSize: UIConfig.fontSize.sm,
+    color: UIConfig.colors.mutedForeground,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: UIConfig.spacing.md,
   },
   loadingText: {
-    marginTop: 12,
-    color: '#71717a',
+    marginTop: UIConfig.spacing.md,
+    color: UIConfig.colors.mutedForeground,
   },
 });

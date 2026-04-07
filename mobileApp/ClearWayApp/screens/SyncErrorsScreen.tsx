@@ -16,6 +16,8 @@ import { RootStackParamList } from '../types/navigation';
 import { DatabaseService } from '../services/database.service';
 import { SyncService } from '../services/sync.service';
 import { LocalMeasurement } from '../types';
+import { CustomHeader } from '../components/ui/CustomHeader';
+import { UIConfig } from '../config/ui.config';
 
 type SyncErrorsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SyncErrors'>;
 
@@ -447,14 +449,9 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← Zpět</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Neodeslaná data</Text>
-        </View>
+        <CustomHeader variant="back" onBack={() => navigation.goBack()} title="Neodeslaná data" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#18181b" />
+          <ActivityIndicator size="large" color={UIConfig.colors.foreground} />
         </View>
       </View>
     );
@@ -462,12 +459,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Zpět</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Neodeslaná data</Text>
-      </View>
+      <CustomHeader variant="back" onBack={() => navigation.goBack()} title="Neodeslaná data" />
 
       {unsentGroups.length === 0 && errorGroups.length === 0 ? (
         <View style={styles.content}>
@@ -534,27 +526,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
-  },
-  header: {
-    backgroundColor: '#fff',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e4e4e7',
-  },
-  backButton: {
-    marginBottom: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#3b82f6',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#18181b',
+    backgroundColor: UIConfig.colors.background,
   },
   content: {
     flex: 1,
@@ -565,46 +537,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   section: {
-    marginBottom: 24,
+    marginBottom: UIConfig.spacing.xxl,
   },
   sectionHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 8,
+    paddingHorizontal: UIConfig.spacing.xl,
+    paddingTop: UIConfig.spacing.xl,
+    paddingBottom: UIConfig.spacing.sm,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: UIConfig.fontSize.lg,
     fontWeight: 'bold',
-    color: '#18181b',
-    marginBottom: 4,
+    color: UIConfig.colors.foreground,
+    marginBottom: UIConfig.spacing.xs,
   },
   sectionSubtitle: {
-    fontSize: 14,
-    color: '#71717a',
+    fontSize: UIConfig.fontSize.sm,
+    color: UIConfig.colors.mutedForeground,
     lineHeight: 20,
   },
   infoBox: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: UIConfig.colors.warningLight,
     borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
-    padding: 16,
-    marginHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 16,
-    borderRadius: 8,
+    borderLeftColor: UIConfig.colors.warning,
+    padding: UIConfig.spacing.lg,
+    marginHorizontal: UIConfig.spacing.xl,
+    marginTop: UIConfig.spacing.sm,
+    marginBottom: UIConfig.spacing.lg,
+    borderRadius: UIConfig.borderRadius.md,
   },
   infoText: {
-    fontSize: 14,
-    color: '#92400e',
+    fontSize: UIConfig.fontSize.sm,
+    color: UIConfig.colors.warningForeground,
   },
   unsentCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 12,
+    backgroundColor: UIConfig.colors.card,
+    borderRadius: UIConfig.borderRadius.lg,
+    padding: UIConfig.spacing.lg,
+    marginHorizontal: UIConfig.spacing.xl,
+    marginBottom: UIConfig.spacing.md,
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: UIConfig.colors.input,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -612,45 +584,45 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   unsentDate: {
-    fontSize: 12,
-    color: '#71717a',
+    fontSize: UIConfig.fontSize.xs,
+    color: UIConfig.colors.mutedForeground,
   },
   unsentCountBadge: {
-    backgroundColor: '#dbeafe',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: UIConfig.colors.infoLight,
+    borderRadius: UIConfig.borderRadius.lg,
+    paddingHorizontal: UIConfig.spacing.md,
+    paddingVertical: UIConfig.spacing.sm,
   },
   unsentCountText: {
-    fontSize: 14,
+    fontSize: UIConfig.fontSize.sm,
     fontWeight: '600',
-    color: '#1e40af',
+    color: UIConfig.colors.info,
   },
   syncButton: {
     flex: 1,
-    backgroundColor: '#10b981',
-    borderRadius: 8,
-    paddingVertical: 12,
+    backgroundColor: UIConfig.colors.success,
+    borderRadius: UIConfig.borderRadius.md,
+    paddingVertical: UIConfig.spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: UIConfig.button.minHeight,
   },
   syncButtonText: {
-    fontSize: 16,
+    fontSize: UIConfig.fontSize.md,
     fontWeight: '600',
-    color: '#fff',
+    color: UIConfig.colors.primaryForeground,
   },
   listContent: {
-    padding: 20,
+    padding: UIConfig.spacing.xl,
   },
   errorCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 12,
+    backgroundColor: UIConfig.colors.card,
+    borderRadius: UIConfig.borderRadius.lg,
+    padding: UIConfig.spacing.lg,
+    marginHorizontal: UIConfig.spacing.xl,
+    marginBottom: UIConfig.spacing.md,
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: UIConfig.colors.destructiveBorder,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -661,28 +633,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: UIConfig.spacing.md,
   },
   sessionId: {
-    fontSize: 16,
+    fontSize: UIConfig.fontSize.md,
     fontWeight: '600',
-    color: '#18181b',
-    marginBottom: 4,
+    color: UIConfig.colors.foreground,
+    marginBottom: UIConfig.spacing.xs,
   },
   errorDate: {
-    fontSize: 12,
-    color: '#71717a',
+    fontSize: UIConfig.fontSize.xs,
+    color: UIConfig.colors.mutedForeground,
   },
   countBadge: {
-    backgroundColor: '#fee2e2',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: UIConfig.colors.destructiveLight,
+    borderRadius: UIConfig.borderRadius.lg,
+    paddingHorizontal: UIConfig.spacing.md,
+    paddingVertical: UIConfig.spacing.sm,
   },
   countText: {
-    fontSize: 14,
+    fontSize: UIConfig.fontSize.sm,
     fontWeight: '600',
-    color: '#dc2626',
+    color: UIConfig.colors.destructive,
   },
   errorMessageBox: {
     backgroundColor: '#fef2f2',
