@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { DatabaseService } from '../services/database.service';
 import { useLocation } from './useLocation';
+import { MeasurementConfig } from '../config/measurement.config';
 
 interface LastMeasurement {
   distance_left: number;
@@ -13,18 +14,24 @@ interface LastMeasurement {
  * Type B: Real obstacle - block of 3-5 lower values (parked car)
  */
 const simulateDistances = (): { distance_left: number; distance_right: number } => {
-  // Base normal value around 300cm
-  const baseLeft = 290 + Math.random() * 20; // 290-310cm
-  const baseRight = 290 + Math.random() * 20;
+  // Base normal value from config
+  const baseLeft = MeasurementConfig.NORMAL_DISTANCE_MIN + 
+    Math.random() * (MeasurementConfig.NORMAL_DISTANCE_MAX - MeasurementConfig.NORMAL_DISTANCE_MIN);
+  const baseRight = MeasurementConfig.NORMAL_DISTANCE_MIN + 
+    Math.random() * (MeasurementConfig.NORMAL_DISTANCE_MAX - MeasurementConfig.NORMAL_DISTANCE_MIN);
 
   // Randomly inject anomalies
   const rand = Math.random();
 
-  // Type A: 5% chance of single outlier (sensor noise)
-  if (rand < 0.05) {
+  // Type A: Configurable chance of single outlier (sensor noise)
+  if (rand < MeasurementConfig.ANOMALY_TYPE_A_PROBABILITY) {
     const isExtremeLow = Math.random() < 0.5;
-    const outlierLeft = isExtremeLow ? 45 + Math.random() * 50 : 550 + Math.random() * 50;
-    const outlierRight = isExtremeLow ? 45 + Math.random() * 50 : 550 + Math.random() * 50;
+    const outlierLeft = isExtremeLow 
+      ? MeasurementConfig.OUTLIER_LOW_MIN + Math.random() * (MeasurementConfig.OUTLIER_LOW_MAX - MeasurementConfig.OUTLIER_LOW_MIN)
+      : MeasurementConfig.OUTLIER_HIGH_MIN + Math.random() * (MeasurementConfig.OUTLIER_HIGH_MAX - MeasurementConfig.OUTLIER_HIGH_MIN);
+    const outlierRight = isExtremeLow 
+      ? MeasurementConfig.OUTLIER_LOW_MIN + Math.random() * (MeasurementConfig.OUTLIER_LOW_MAX - MeasurementConfig.OUTLIER_LOW_MIN)
+      : MeasurementConfig.OUTLIER_HIGH_MIN + Math.random() * (MeasurementConfig.OUTLIER_HIGH_MAX - MeasurementConfig.OUTLIER_HIGH_MIN);
     
     console.log('🔴 TYPE A ANOMALY: Single outlier', { left: outlierLeft, right: outlierRight });
     return {
@@ -33,7 +40,7 @@ const simulateDistances = (): { distance_left: number; distance_right: number } 
     };
   }
 
-  // Type B: 3% chance to START a real obstacle (parked car)
+  // Type B: Configurable chance to START a real obstacle (parked car)
   // We'll use a ref-based counter outside this function via useState in useMeasurement
   return {
     distance_left: baseLeft,
@@ -100,18 +107,21 @@ export const useMeasurement = (sessionId: string | null) => {
         try {
           let distances = simulateDistances();
           
-          // Type B anomaly logic: Start obstacle with 3% chance
-          if (!inObstacleRef.current && Math.random() < 0.03) {
+          // Type B anomaly logic: Start obstacle with configurable chance
+          if (!inObstacleRef.current && Math.random() < MeasurementConfig.ANOMALY_TYPE_B_PROBABILITY) {
             inObstacleRef.current = true;
-            obstacleCounterRef.current = 3 + Math.floor(Math.random() * 3); // 3-5 measurements
+            obstacleCounterRef.current = MeasurementConfig.OBSTACLE_DURATION_MIN + 
+              Math.floor(Math.random() * (MeasurementConfig.OBSTACLE_DURATION_MAX - MeasurementConfig.OBSTACLE_DURATION_MIN + 1));
             console.log('🟡 TYPE B ANOMALY START: Real obstacle for', obstacleCounterRef.current, 'measurements');
           }
 
           // If in obstacle, use lower values (parked car)
           if (inObstacleRef.current) {
             distances = {
-              distance_left: 190 + Math.random() * 40, // 190-230cm
-              distance_right: 190 + Math.random() * 40,
+              distance_left: MeasurementConfig.OBSTACLE_DISTANCE_MIN + 
+                Math.random() * (MeasurementConfig.OBSTACLE_DISTANCE_MAX - MeasurementConfig.OBSTACLE_DISTANCE_MIN),
+              distance_right: MeasurementConfig.OBSTACLE_DISTANCE_MIN + 
+                Math.random() * (MeasurementConfig.OBSTACLE_DISTANCE_MAX - MeasurementConfig.OBSTACLE_DISTANCE_MIN),
             };
             
             obstacleCounterRef.current--;

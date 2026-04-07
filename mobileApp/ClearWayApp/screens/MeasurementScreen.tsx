@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, AppState, AppStateStatus } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, AppState, AppStateStatus } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CustomHeader } from '../components/ui/CustomHeader';
 import { BackendStatusBar } from '../components/BackendStatusBar';
 import { useMeasurement } from '../hooks/useMeasurement';
 import { useSync } from '../hooks/useSync';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
+import { UIConfig } from '../config/ui.config';
+import { MeasurementConfig } from '../config/measurement.config';
 
 type MeasurementScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Measurement'>;
 type MeasurementScreenRouteProp = RouteProp<RootStackParamList, 'Measurement'>;
@@ -135,19 +138,18 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   // Calculate street width from last measurement (distance_left + distance_right + vehicle_width)
-  // For now, assume vehicle width is ~180cm (will be from vehicle data later)
   const getStreetWidth = () => {
     if (!lastMeasurement) return null;
     // Convert cm to meters for display
-    const widthCm = lastMeasurement.distance_left + lastMeasurement.distance_right + 180;
+    const widthCm = lastMeasurement.distance_left + lastMeasurement.distance_right + MeasurementConfig.vehicle.defaultWidthCm;
     return widthCm / 100;
   };
 
   const getWidthColor = (widthM: number | null) => {
-    if (widthM === null) return '#71717a';
-    if (widthM > 3.5) return '#22c55e'; // Green
-    if (widthM >= 3.0) return '#eab308'; // Yellow
-    return '#ef4444'; // Red
+    if (widthM === null) return UIConfig.colors.mutedForeground;
+    if (widthM > MeasurementConfig.widthThresholds.greenMinMeters) return MeasurementConfig.widthThresholds.colors.green;
+    if (widthM >= MeasurementConfig.widthThresholds.yellowMinMeters) return MeasurementConfig.widthThresholds.colors.yellow;
+    return MeasurementConfig.widthThresholds.colors.red;
   };
 
   const streetWidth = getStreetWidth();
@@ -166,13 +168,9 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
     <View style={styles.container}>
       <BackendStatusBar />
       
+      <CustomHeader variant="close" onClose={handleClose} title="Měření" />
+      
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        {/* Close Button */}
-        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-          <Text style={styles.closeButtonText}>✕</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title}>Měření</Text>
 
         {/* Current Width Display */}
         <Card style={[styles.card, styles.widthCard]}>
@@ -251,16 +249,16 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
         <Card style={styles.card}>
           <Text style={styles.label}>Legenda barev:</Text>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#22c55e' }]} />
-            <Text style={styles.legendText}>&gt; 3.5m - Zelená</Text>
+            <View style={[styles.legendDot, { backgroundColor: MeasurementConfig.widthThresholds.colors.green }]} />
+            <Text style={styles.legendText}>&gt; {MeasurementConfig.widthThresholds.greenMinMeters}m - Zelená</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#eab308' }]} />
-            <Text style={styles.legendText}>3.0 - 3.5m - Žlutá</Text>
+            <View style={[styles.legendDot, { backgroundColor: MeasurementConfig.widthThresholds.colors.yellow }]} />
+            <Text style={styles.legendText}>{MeasurementConfig.widthThresholds.yellowMinMeters} - {MeasurementConfig.widthThresholds.greenMinMeters}m - Žlutá</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-            <Text style={styles.legendText}>&lt; 3.0m - Červená</Text>
+            <View style={[styles.legendDot, { backgroundColor: MeasurementConfig.widthThresholds.colors.red }]} />
+            <Text style={styles.legendText}>&lt; {MeasurementConfig.widthThresholds.yellowMinMeters}m - Červená</Text>
           </View>
         </Card>
       </ScrollView>
@@ -271,114 +269,90 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
+    backgroundColor: UIConfig.colors.background,
   },
   scrollView: {
     flex: 1,
   },
   content: {
-    padding: 20,
-    paddingTop: 60,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#e4e4e7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  closeButtonText: {
-    fontSize: 24,
-    color: '#18181b',
-    fontWeight: '300',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 24,
-    color: '#18181b',
+    padding: UIConfig.spacing.xl,
   },
   card: {
-    marginBottom: 16,
+    marginBottom: UIConfig.spacing.lg,
   },
   widthCard: {
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#e4e4e7',
+    borderColor: UIConfig.colors.border,
   },
   widthLabel: {
-    fontSize: 16,
+    fontSize: UIConfig.fontSize.md,
     fontWeight: '500',
-    color: '#71717a',
-    marginBottom: 12,
+    color: UIConfig.colors.mutedForeground,
+    marginBottom: UIConfig.spacing.md,
   },
   widthDisplay: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: UIConfig.spacing.lg,
   },
   widthValue: {
     fontSize: 48,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: UIConfig.spacing.sm,
   },
   widthIndicator: {
     width: '100%',
     height: 8,
-    borderRadius: 4,
+    borderRadius: UIConfig.borderRadius.sm,
   },
   distanceDetails: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 8,
+    marginTop: UIConfig.spacing.sm,
   },
   distanceText: {
-    fontSize: 14,
-    color: '#71717a',
+    fontSize: UIConfig.fontSize.sm,
+    color: UIConfig.colors.mutedForeground,
   },
   label: {
-    fontSize: 14,
+    fontSize: UIConfig.fontSize.sm,
     fontWeight: '500',
-    color: '#71717a',
-    marginBottom: 8,
+    color: UIConfig.colors.mutedForeground,
+    marginBottom: UIConfig.spacing.sm,
   },
   value: {
-    fontSize: 16,
-    color: '#18181b',
-    marginBottom: 4,
+    fontSize: UIConfig.fontSize.md,
+    color: UIConfig.colors.foreground,
+    marginBottom: UIConfig.spacing.xs,
   },
   errorCard: {
     backgroundColor: '#fef2f2',
     borderColor: '#fca5a5',
   },
   errorText: {
-    color: '#dc2626',
-    fontSize: 14,
+    color: UIConfig.colors.destructive,
+    fontSize: UIConfig.fontSize.sm,
   },
   controlButton: {
-    marginVertical: 8,
-    paddingVertical: 16,
+    marginVertical: UIConfig.spacing.sm,
+    paddingVertical: UIConfig.spacing.lg,
   },
   syncButton: {
-    marginTop: 12,
+    marginTop: UIConfig.spacing.md,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 4,
+    marginVertical: UIConfig.spacing.xs,
   },
   legendDot: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    marginRight: 8,
+    marginRight: UIConfig.spacing.sm,
   },
   legendText: {
-    fontSize: 14,
-    color: '#18181b',
+    fontSize: UIConfig.fontSize.sm,
+    color: UIConfig.colors.foreground,
   },
 });

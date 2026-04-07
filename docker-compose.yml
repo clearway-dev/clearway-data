@@ -52,16 +52,124 @@ services:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
       CELERY_BROKER_URL: redis://clearway-redis:6379/0
       CELERY_RESULT_BACKEND: redis://clearway-redis:6379/0
+      WORKER_METRICS_PORT: 8001
     env_file:
       - .env
-    command: celery -A app.worker.celery_app worker --loglevel=info
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
     restart: unless-stopped
     depends_on:
       - redis
     networks:
       - clearway-network
 
+  # ---------------------------------------------------------------------------
+  # FLOWER SERVICE (Celery monitoring UI with Prometheus metrics)
+  # ---------------------------------------------------------------------------
+  flower:
+    build:
+      context: ./backend
+    container_name: clearway-flower
+    ports:
+      - "5555:5555"  # Flower web UI
+    volumes:
+      - ./backend:/app
+      - ./logs:/app/logs
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+      CELERY_BROKER_URL: redis://clearway-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://clearway-redis:6379/0
+      FLOWER_PORT: 5555
+    env_file:
+      - .env
+    command: celery -A app.worker.celery_app flower --port=5555
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - celery_worker
+    networks:
+      - clearway-network
+
+  # ---------------------------------------------------------------------------
+  # PROMETHEUS SERVICE (Metrics collection and storage)
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: clearway-prometheus
+    ports:
+      - "9090:9090"  # Prometheus web UI
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'  # Keep metrics for 30 days
+    restart: unless-stopped
+    networks:
+      - clearway-network
+
+  # ---------------------------------------------------------------------------
+  # CADVISOR SERVICE (Container CPU/RAM metrics for Prometheus)
+  # ---------------------------------------------------------------------------
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: clearway-cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+    networks:
+      - clearway-network
+
+  # ---------------------------------------------------------------------------
+  # GRAFANA SERVICE (Metrics visualization and dashboards)
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: clearway-grafana
+    ports:
+      - "3000:3000"  # Grafana web UI
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    networks:
+      - clearway-network
+
+  # ---------------------------------------------------------------------------
+  # POSTGRES EXPORTER (PostgreSQL metrics for Prometheus)
+  # ---------------------------------------------------------------------------
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: clearway-postgres-exporter
+    ports:
+      - "9187:9187"  # Postgres exporter metrics endpoint
+    environment:
+      DATA_SOURCE_NAME: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - clearway-network
+
 # Use the external network created by the database docker-compose
 networks:
   clearway-network:
-    external: true  
+    external: true
+
+# Persistent volumes for Prometheus and Grafana data
+volumes:
+  prometheus_data:
+  grafana_data:

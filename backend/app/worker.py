@@ -17,6 +17,7 @@ from celery import Celery
 from celery.signals import worker_process_init
 from geoalchemy2.shape import from_shape
 from loguru import logger
+from prometheus_client import start_http_server
 from scipy.signal import medfilt
 from shapely.geometry import Point
 from sqlalchemy import text
@@ -24,6 +25,13 @@ from sqlalchemy.orm import Session
 
 from . import models
 from .database import SessionLocal
+
+# ==============================================
+# PROMETHEUS CUSTOM METRICS (shared with main.py)
+# ==============================================
+
+# Import metrics from dedicated metrics module (avoids circular imports)
+from .metrics import invalid_measurements_total, batches_received_total
 
 
 class BatchNotFoundError(Exception):
@@ -36,6 +44,9 @@ class BatchNotFoundError(Exception):
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://clearway-redis:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://clearway-redis:6379/0")
+WORKER_METRICS_PORT = int(os.getenv("WORKER_METRICS_PORT", "8001"))
+
+_worker_metrics_server_started = False
 
 # Maximum distance in metres for snapping a GPS point to a road segment.
 MAP_MATCH_MAX_DISTANCE_M = 50.0
@@ -53,6 +64,8 @@ celery_app = Celery(
 
 @worker_process_init.connect
 def setup_worker_logger(**kwargs):
+    global _worker_metrics_server_started
+
     os.makedirs("/app/logs", exist_ok=True)
     logger.remove()
     logger.add(
@@ -61,6 +74,21 @@ def setup_worker_logger(**kwargs):
         retention="7 days",
         level="INFO",
     )
+
+    # Expose worker-local Prometheus metrics for scraping by Prometheus.
+    # With current compose setup worker runs with concurrency=1, so a single
+    # task process owns counters and exposes them on one endpoint.
+    if not _worker_metrics_server_started:
+        try:
+            start_http_server(WORKER_METRICS_PORT)
+            _worker_metrics_server_started = True
+            logger.info(
+                f"Celery worker metrics endpoint started on :{WORKER_METRICS_PORT}/metrics"
+            )
+        except OSError as exc:
+            logger.warning(
+                f"Celery worker metrics endpoint could not start on :{WORKER_METRICS_PORT}: {exc}"
+            )
 
 
 # --------------------------------------------------------------------------- #
@@ -104,59 +132,89 @@ def _map_match(
     db: Session,
     lat: float,
     lon: float,
+    vehicle_heading: float | None = None,
     max_distance_m: float = MAP_MATCH_MAX_DISTANCE_M,
 ) -> tuple[float, float] | None:
     """
-    Project a GPS point onto the nearest road segment using PostGIS.
+    Project a GPS point onto the nearest road segment using PostGIS with heading-aware selection.
 
     Searches road_segments within *max_distance_m* metres (geography cast for
-    accurate metric distances), then returns the closest point on the winning
-    segment's geometry.
+    accurate metric distances), returns the top 3 closest candidates, and selects
+    the best match based on heading alignment when vehicle_heading is provided.
+
+    Args:
+        db: Database session
+        lat: GPS latitude
+        lon: GPS longitude
+        vehicle_heading: Optional vehicle heading in degrees (0-360)
+        max_distance_m: Maximum distance to search for road segments
 
     Returns (snapped_lat, snapped_lon) or None when no match is found.
     """
-    row = db.execute(
+    rows = db.execute(
         text(
             """
             SELECT
-                ST_Y(ST_ClosestPoint(rs.geom,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lat,
-                ST_X(ST_ClosestPoint(rs.geom,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lon
+                ST_Y(ST_ClosestPoint(rs.geom, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lat,
+                ST_X(ST_ClosestPoint(rs.geom, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))) AS snapped_lon,
+                degrees(ST_Azimuth(ST_StartPoint(rs.geom), ST_EndPoint(rs.geom))) AS road_heading,
+                ST_Distance(rs.geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) AS distance
             FROM road_segments rs
-            WHERE ST_DWithin(
-                rs.geom::geography,
-                ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
-                :max_dist
-            )
-            ORDER BY ST_Distance(
-                rs.geom::geography,
-                ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
-            )
-            LIMIT 1
+            -- Nejprve pomocí rychlého indexu ořízneme hledání na malý čtvereček (cca odpovídá tvému max_dist)
+            WHERE rs.geom && ST_Expand(ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :max_dist / 111320.0) 
+            -- Následně seřadíme podle skutečné geometrické vzdálenosti pomocí bleskového operátoru <->
+            ORDER BY rs.geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
+            LIMIT 3;
             """
-            # WITH p AS (
-            #     SELECT ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) AS pt
-            # )
-            # SELECT
-            #     ST_Y(q.cp) AS snapped_lat,
-            #     ST_X(q.cp) AS snapped_lon
-            # FROM p
-            # CROSS JOIN LATERAL (
-            #     SELECT ST_ClosestPoint(rs.geom, p.pt) AS cp
-            #     FROM road_segments rs
-            #     WHERE ST_DWithin(rs.geom::geography, p.pt::geography, :max_dist)
-            #     ORDER BY ST_Distance(rs.geom::geography, p.pt::geography)
-            #     LIMIT 1
-            # ) q;
         ),
         {"lat": lat, "lon": lon, "max_dist": max_distance_m},
-    ).fetchone()
+    ).fetchall()
 
-    if row is None:
+    if not rows:
         return None
 
-    return float(row.snapped_lat), float(row.snapped_lon)
+    # If no vehicle heading provided, return the closest segment (index 0)
+    if vehicle_heading is None:
+        logger.debug(
+            f"map_match selection_method=fallback_no_heading lat={lat:.6f} lon={lon:.6f} "
+            f"snapped_lat={rows[0].snapped_lat:.6f} snapped_lon={rows[0].snapped_lon:.6f}"
+        )
+        return float(rows[0].snapped_lat), float(rows[0].snapped_lon)
+
+    # Helper: Calculate angular difference with 360-degree wrap-around
+    def angular_diff(angle1: float, angle2: float) -> float:
+        """Calculate the minimum angular difference between two angles (0-180 degrees)."""
+        diff = abs(angle1 - angle2) % 360
+        return min(diff, 360 - diff)
+
+    # Iterate through candidates and select the first one that passes heading check
+    for idx, row in enumerate(rows):
+        road_heading = float(row.road_heading) if row.road_heading is not None else None
+        
+        if road_heading is None:
+            # Skip segments without valid heading (e.g., zero-length segments)
+            continue
+        
+        diff = angular_diff(vehicle_heading, road_heading)
+        
+        # Bidirectional check: same direction (<=45°) or opposite direction (>=135°)
+        is_valid = diff <= 45.0 or diff >= 135.0
+        
+        if is_valid:
+            logger.debug(
+                f"map_match selection_method=heading_validated candidate={idx+1}/3 "
+                f"vehicle_heading={vehicle_heading:.1f}° road_heading={road_heading:.1f}° "
+                f"angular_diff={diff:.1f}° lat={lat:.6f} lon={lon:.6f} "
+                f"snapped_lat={row.snapped_lat:.6f} snapped_lon={row.snapped_lon:.6f}"
+            )
+            return float(row.snapped_lat), float(row.snapped_lon)
+
+    # Fallback: None of the 3 candidates passed heading check, return the closest
+    logger.debug(
+        f"map_match selection_method=fallback_no_valid_heading vehicle_heading={vehicle_heading:.1f}° "
+        f"lat={lat:.6f} lon={lon:.6f} snapped_lat={rows[0].snapped_lat:.6f} snapped_lon={rows[0].snapped_lon:.6f}"
+    )
+    return float(rows[0].snapped_lat), float(rows[0].snapped_lon)
 
 
 def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -173,6 +231,33 @@ def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) ->
     )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return earth_radius_m * c
+
+
+def _calculate_heading(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the bearing/heading from point 1 to point 2 in degrees (0-360).
+    
+    Uses the forward azimuth formula. 0° = North, 90° = East, 180° = South, 270° = West.
+    
+    Args:
+        lat1, lon1: Coordinates of the starting point
+        lat2, lon2: Coordinates of the ending point
+        
+    Returns:
+        Heading in degrees (0-360)
+    """
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lon = math.radians(lon2 - lon1)
+    
+    x = math.sin(delta_lon) * math.cos(lat2_rad)
+    y = math.cos(lat1_rad) * math.sin(lat2_rad) - math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(delta_lon)
+    
+    heading_rad = math.atan2(x, y)
+    heading_deg = math.degrees(heading_rad)
+    
+    # Normalize to 0-360 range
+    return (heading_deg + 360) % 360
 
 
 def _apply_width_median_filter(widths: list[float], window: int = WIDTH_MEDIAN_WINDOW) -> list[float]:
@@ -199,6 +284,8 @@ def _apply_width_median_filter(widths: list[float], window: int = WIDTH_MEDIAN_W
 @celery_app.task(
     name="process_batch_task",
     bind=True,
+    acks_late=True,  # Acknowledge task only after successful completion
+    reject_on_worker_lost=True,  # Requeue task if worker crashes/dies
     autoretry_for=(BatchNotFoundError,),
     retry_backoff=True,
     retry_backoff_max=600,
@@ -227,33 +314,77 @@ def process_batch_task(self, batch_id: str) -> dict:
     - Initial retry delay: 10 seconds
     - Uses exponential backoff with jitter to prevent thundering herd
     - Max backoff: 600 seconds (10 minutes)
+    
+    Reliability features:
+    - acks_late=True: Task acknowledged only after successful completion
+    - reject_on_worker_lost=True: Task requeued if worker crashes
+    - Idempotence: Safe to retry - checks if batch already completed
+    - Poison pill handling: After max retries, marks batch as 'failed'
     """
+    import uuid
+    
     db: Session = SessionLocal()
+    batch_uuid: uuid.UUID | None = None
+    
+    # ====================================================================== #
+    # PHASE 0: IDEMPOTENCE CHECK (separate read-only transaction)
+    # ====================================================================== #
     try:
-        import uuid
         batch_uuid = uuid.UUID(batch_id)
         
-        # ------------------------------------------------------------------ #
-        # LOAD BATCH and update status to 'processing'
-        # ------------------------------------------------------------------ #
-        batch: models.Batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+        # Read-only check - does not modify data
+        batch_check = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
         
-        if not batch:
+        if not batch_check:
             logger.warning(
                 f"Batch {batch_id} not found in database - will retry "
                 f"(attempt {self.request.retries + 1}/{self.max_retries})"
             )
+            db.close()
             # Raise custom exception to trigger automatic retry
             raise BatchNotFoundError(
                 f"Batch {batch_id} not found in database. "
                 f"This may be a race condition - task will retry."
             )
         
-        # Update batch status to 'processing'
-        batch.status = 'processing'
-        db.flush()
+        # IDEMPOTENCE: If batch already completed, skip processing
+        if batch_check.status == 'completed':
+            logger.info(
+                f"Batch {batch_id} already completed (idempotence check) - skipping duplicate processing"
+            )
+            db.close()
+            return {
+                "batch_id": batch_id,
+                "status": "completed",
+                "message": "Batch already completed (idempotent retry)",
+            }
         
-        logger.info(f"process_batch_task started for batch_id={batch_id}")
+        db.close()
+        
+    except BatchNotFoundError:
+        raise  # Re-raise to trigger retry
+    except Exception as e:
+        db.close()
+        logger.error(f"Error during idempotence check for batch {batch_id}: {str(e)}")
+        raise
+    
+    # ====================================================================== #
+    # MAIN TRANSACTION: All-or-nothing ACID processing
+    # ====================================================================== #
+    db = SessionLocal()
+    try:
+        # ------------------------------------------------------------------ #
+        # LOAD BATCH and update status to 'processing'
+        # ------------------------------------------------------------------ #
+        batch: models.Batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+        
+        if not batch:
+            # Should not happen after idempotence check, but defensive programming
+            raise BatchNotFoundError(f"Batch {batch_id} disappeared between checks")
+        
+        # Start transaction: update batch status to 'processing'
+        batch.status = 'processing'
+        # DO NOT commit yet - this is part of the main transaction
 
         # ------------------------------------------------------------------ #
         # LOAD - measurements with session + vehicle eagerly joined
@@ -268,9 +399,7 @@ def process_batch_task(self, batch_id: str) -> dict:
             .all()
         )
 
-        logger.info(
-            f"Batch {batch_id}: loaded {len(measurements)} measurements"
-        )
+        logger.info(f"Worker started processing batch {batch_id} ({len(measurements)} measurements)")
 
         # Pre-load existing invalid IDs to avoid duplicate entries on retry.
         measurement_ids = [m.id for m in measurements]
@@ -303,10 +432,12 @@ def process_batch_task(self, batch_id: str) -> dict:
                         )
                     )
                     existing_invalid_ids.add(m.id)
-                logger.info(
-                    "measurement_evaluation id={} status=invalid stage=logical_validation reason='{}'",
-                    m.id,
-                    reason,
+                    
+                    # ✅ PROMETHEUS: Track invalid measurements by reason category
+                    invalid_measurements_total.labels(reason="logical_validation").inc()
+                    
+                logger.debug(
+                    f"Measurement {m.id} rejected at logical validation: {reason}"
                 )
                 continue
 
@@ -320,12 +451,40 @@ def process_batch_task(self, batch_id: str) -> dict:
                     m.longitude,
                 )
 
-                is_unrealistic_jump = (
-                    (time_diff_s == 0 and distance_m > 0)
-                    or (time_diff_s > 0 and (distance_m / time_diff_s) > MAX_REALISTIC_SPEED_MPS)
-                )
-
-                if is_unrealistic_jump:
+                # Handle duplicate timestamp or zero time difference
+                if time_diff_s == 0:
+                    if distance_m > 0:
+                        # Duplicate timestamp but different location - reject
+                        invalid_count += 1
+                        m.is_valid = False
+                        reason = "GPS jump detected: Duplicate timestamp with different location"
+                        if m.id not in existing_invalid_ids:
+                            invalid_records.append(
+                                models.InvalidMeasurement(
+                                    raw_measurement_id=m.id,
+                                    rejection_reason=reason,
+                                )
+                            )
+                            existing_invalid_ids.add(m.id)
+                            
+                            # ✅ PROMETHEUS: Track GPS jump (duplicate timestamp)
+                            invalid_measurements_total.labels(reason="gps_jump_duplicate_timestamp").inc()
+                            
+                        logger.warning(
+                            "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
+                            "distance_m={:.2f} time_diff_s={:.2f} speed_mps=undefined",
+                            m.id,
+                            reason,
+                            distance_m,
+                            time_diff_s,
+                        )
+                        # Important: do not move last_valid_point on invalid jump.
+                        continue
+                    # else: time_diff_s == 0 and distance_m == 0 - exact duplicate, skip quietly
+                    # This is likely duplicate data, ignore and continue without validation error
+                
+                # Check for unrealistic speed when time_diff_s > 0
+                elif (distance_m / time_diff_s) > MAX_REALISTIC_SPEED_MPS:
                     invalid_count += 1
                     m.is_valid = False
                     reason = "GPS jump detected: Unrealistic speed"
@@ -337,24 +496,27 @@ def process_batch_task(self, batch_id: str) -> dict:
                             )
                         )
                         existing_invalid_ids.add(m.id)
-                    speed_estimate = None if time_diff_s <= 0 else (distance_m / time_diff_s)
-                    logger.info(
+                        
+                        # ✅ PROMETHEUS: Track GPS jump (unrealistic speed)
+                        invalid_measurements_total.labels(reason="gps_jump_unrealistic_speed").inc()
+                        
+                    speed_mps = distance_m / time_diff_s
+                    logger.warning(
                         "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
-                        "distance_m={:.2f} time_diff_s={:.2f} speed_mps={}",
+                        "distance_m={:.2f} time_diff_s={:.2f} speed_mps={:.2f}",
                         m.id,
                         reason,
                         distance_m,
                         time_diff_s,
-                        f"{speed_estimate:.2f}" if speed_estimate is not None else "inf",
+                        speed_mps,
                     )
                     # Important: do not move last_valid_point on invalid jump.
                     continue
 
             valid_measurements.append(m)
             last_valid_point = m
-            logger.info(
-                "measurement_evaluation id={} status=valid stage=logical_validation",
-                m.id,
+            logger.debug(
+                f"Measurement {m.id} passed logical validation"
             )
 
         # ------------------------------------------------------------------ #
@@ -364,11 +526,27 @@ def process_batch_task(self, batch_id: str) -> dict:
         unmatched_count = 0
 
         matched_points: list[dict] = []
+        
+        # Track previous valid measurement for heading calculation
+        prev_measurement: models.RawMeasurement | None = None
 
         for m in valid_measurements:
             vehicle_width: float = m.batch.session.vehicle.width
+            
+            # Calculate vehicle heading from consecutive GPS points
+            vehicle_heading: float | None = None
+            if prev_measurement is not None:
+                # Only calculate heading if points are different
+                if (prev_measurement.latitude != m.latitude or 
+                    prev_measurement.longitude != m.longitude):
+                    vehicle_heading = _calculate_heading(
+                        prev_measurement.latitude,
+                        prev_measurement.longitude,
+                        m.latitude,
+                        m.longitude
+                    )
 
-            snapped = _map_match(db, m.latitude, m.longitude)
+            snapped = _map_match(db, m.latitude, m.longitude, vehicle_heading)
             if snapped is None:
                 # No road segment within range - mark as invalid and record reason.
                 unmatched_count += 1
@@ -386,14 +564,12 @@ def process_batch_task(self, batch_id: str) -> dict:
                         )
                     )
                     existing_invalid_ids.add(m.id)
+                    
+                    # ✅ PROMETHEUS: Track map-matching failures
+                    invalid_measurements_total.labels(reason="map_matching_failed").inc()
 
-                logger.info(
-                    "measurement_evaluation id={} status=invalid stage=map_matching "
-                    "reason='no road segment within {:.0f} m' lat={:.6f} lon={:.6f}",
-                    m.id,
-                    MAP_MATCH_MAX_DISTANCE_M,
-                    m.latitude,
-                    m.longitude,
+                logger.debug(
+                    f"Measurement {m.id} rejected at map matching: no road segment within {MAP_MATCH_MAX_DISTANCE_M:.0f}m"
                 )
                 continue
 
@@ -408,6 +584,9 @@ def process_batch_task(self, batch_id: str) -> dict:
                     "raw_width": raw_width,
                 }
             )
+            
+            # Update previous measurement for next heading calculation
+            prev_measurement = m
 
         # Final cleaning step: median filter AFTER map-matching.
         # Batch is already chronologically ordered and belongs to one vehicle.
@@ -430,14 +609,8 @@ def process_batch_task(self, batch_id: str) -> dict:
                 )
             )
 
-            logger.info(
-                "measurement_evaluation id={} status=cleaned stage=post_map_matching_median "
-                "snapped_lat={:.6f} snapped_lon={:.6f} cleaned_width={:.3f} raw_width={:.3f}",
-                m.id,
-                snapped_lat,
-                snapped_lon,
-                filtered_width,
-                item["raw_width"],
+            logger.debug(
+                f"Measurement {m.id} map-matched. Width cleaned: {item['raw_width']:.3f} -> {filtered_width:.3f}"
             )
 
         if cleaned_records:
@@ -447,15 +620,28 @@ def process_batch_task(self, batch_id: str) -> dict:
         if invalid_records:
             db.bulk_save_objects(invalid_records)
 
-        # Update batch status to 'completed'
+        # ------------------------------------------------------------------ #
+        # FINAL STEP: Update batch status to 'completed'
+        # ------------------------------------------------------------------ #
         batch.status = 'completed'
         
-        # Single transaction covering all phases
+        # ------------------------------------------------------------------ #
+        # ATOMIC COMMIT: All-or-nothing - single point of persistence
+        # ------------------------------------------------------------------ #
+        # This commits:
+        # 1. batch.status = 'processing' (from start)
+        # 2. All m.is_valid = False updates on RawMeasurement
+        # 3. All InvalidMeasurement inserts (phase 1 + phase 2)
+        # 4. All CleanedMeasurement inserts
+        # 5. batch.status = 'completed' (final state)
         db.commit()
-
+        
+        # ✅ PROMETHEUS: Update batch status counter (completed)
+        batches_received_total.labels(status="completed").inc()
+        
         logger.info(
-            f"Batch {batch_id} completed - processed={len(measurements)} invalid={invalid_count} "
-            f"cleaned={len(cleaned_records)} unmatched={unmatched_count}"
+            f"Batch {batch_id} completed - processed={len(measurements)} "
+            f"valid/cleaned={len(cleaned_records)} dropped={invalid_count} unmatched={unmatched_count}"
         )
 
         return {
@@ -467,26 +653,77 @@ def process_batch_task(self, batch_id: str) -> dict:
             "unmatched": unmatched_count,
             "message": "Batch processing completed successfully",
         }
-    except BatchNotFoundError:
-        # Let Celery handle the retry automatically
-        db.rollback()
-        db.close()
-        raise
-    except Exception as e:
-        # Update batch status to 'failed' on error
-        batch: models.Batch | None = None
-        try:
-            if 'batch_uuid' in locals():
-                batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
-            if batch:
-                batch.status = 'failed'
-                db.commit()
-                logger.error(f"Batch {batch_id} failed: {str(e)}")
-        except Exception as commit_error:
-            logger.error(f"Failed to update batch status to 'failed': {str(commit_error)}")
         
+    except BatchNotFoundError:
+        # ------------------------------------------------------------------ #
+        # ROLLBACK on race condition - let Celery retry
+        # ------------------------------------------------------------------ #
+        logger.warning(f"Batch {batch_id} not found during processing - rolling back transaction")
         db.rollback()
-        logger.exception(f"Unhandled error in process_batch_task for batch {batch_id}")
-        raise
-    finally:
         db.close()
+        raise  # Re-raise to trigger Celery automatic retry
+        
+    except Exception as e:
+        # ------------------------------------------------------------------ #
+        # ROLLBACK on ANY error - restore database to clean state
+        # ------------------------------------------------------------------ #
+        logger.error(f"Error during batch {batch_id} processing: {str(e)} - rolling back all changes")
+        db.rollback()  # CRITICAL: Undo ALL changes in this transaction
+        db.close()
+        
+        # ------------------------------------------------------------------ #
+        # AUTO-RETRY logic for transient errors (e.g., DB connection issues)
+        # ------------------------------------------------------------------ #
+        # Check if we have retries remaining
+        if self.request.retries < 3:
+            logger.warning(
+                f"Batch {batch_id} encountered error (attempt {self.request.retries + 1}/3): {str(e)} - will retry in 60s"
+            )
+            # Retry with 60 second countdown
+            raise self.retry(exc=e, countdown=60, max_retries=3)
+        
+        # ------------------------------------------------------------------ #
+        # POISON PILL HANDLING - Max retries exhausted
+        # ------------------------------------------------------------------ #
+        logger.error(
+            f"Batch {batch_id} failed after {self.request.retries + 1} attempts (poison pill detected): {str(e)}"
+        )
+        
+        # Mark batch as 'failed' in database to prevent infinite retries
+        # IMPORTANT: This is a NEW, SEPARATE transaction (previous one was rolled back)
+        if batch_uuid is not None:
+            db_fail = SessionLocal()  # Fresh session for failure logging
+            try:
+                failed_batch = db_fail.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+                if failed_batch:
+                    failed_batch.status = 'failed'
+                    db_fail.commit()  # Separate transaction for failure marker
+                    
+                    # ✅ PROMETHEUS: Update batch status counter (failed)
+                    batches_received_total.labels(status="failed").inc()
+                    
+                    logger.info(f"Batch {batch_id} marked as 'failed' in database (separate transaction)")
+                else:
+                    logger.warning(f"Could not find batch {batch_id} to mark as failed")
+            except Exception as commit_error:
+                logger.error(f"Failed to update batch {batch_id} status to 'failed': {str(commit_error)}")
+                db_fail.rollback()
+            finally:
+                db_fail.close()
+        else:
+            logger.warning(f"Cannot mark batch as failed - batch_uuid not parsed from {batch_id}")
+        
+        # Log full exception details for debugging
+        logger.exception(f"Full traceback for failed batch {batch_id}")
+        
+        # Re-raise the original exception to mark task as failed in Celery
+        raise
+        
+    finally:
+        # ------------------------------------------------------------------ #
+        # CLEANUP: Ensure session is always closed
+        # ------------------------------------------------------------------ #
+        try:
+            db.close()
+        except Exception:
+            pass  # Ignore errors during cleanup

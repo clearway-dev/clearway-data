@@ -8,11 +8,16 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { DatabaseService } from '../services/database.service';
 import { SyncService } from '../services/sync.service';
+import { LocalMeasurement } from '../types';
+import { CustomHeader } from '../components/ui/CustomHeader';
+import { UIConfig } from '../config/ui.config';
 
 type SyncErrorsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SyncErrors'>;
 
@@ -41,6 +46,9 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
   const [syncingSessionId, setSyncingSessionId] = useState<string | null>(null);
   const [retryingSessionId, setRetryingSessionId] = useState<string | null>(null);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [detailData, setDetailData] = useState<LocalMeasurement[]>([]);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -66,6 +74,36 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
     setIsRefreshing(true);
     loadData();
   }, [loadData]);
+
+  const handleOpenDetail = async (sessionId: string, isError: boolean) => {
+    setSelectedSessionId(sessionId);
+    setIsLoadingDetail(true);
+    
+    try {
+      let data: LocalMeasurement[];
+      
+      if (isError) {
+        // Load error records for this session
+        const allErrors = await DatabaseService.getErrorRecords(10000);
+        data = allErrors.filter(m => m.session_id === sessionId);
+      } else {
+        // Load unsent records for this session
+        data = await DatabaseService.getUnsyncedMeasurementsBySession(sessionId, 10000);
+      }
+      
+      setDetailData(data);
+    } catch (error) {
+      console.error('Failed to load detail data:', error);
+      Alert.alert('Chyba', 'Nepodařilo se načíst detailní data.');
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  };
+
+  const handleCloseDetail = () => {
+    setSelectedSessionId(null);
+    setDetailData([]);
+  };
 
   const handleSyncNow = async (sessionId: string) => {
     try {
@@ -198,7 +236,11 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
       : 'Neznámé datum';
 
     return (
-      <View style={styles.unsentCard}>
+      <TouchableOpacity 
+        style={styles.unsentCard}
+        onPress={() => handleOpenDetail(item.session_id, false)}
+        activeOpacity={0.7}
+      >
         <View style={styles.errorHeader}>
           <View>
             <Text style={styles.sessionId}>Jízda {sessionIdShort}...</Text>
@@ -212,7 +254,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={[styles.syncButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleSyncNow(item.session_id)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleSyncNow(item.session_id);
+            }}
             disabled={isProcessing}
           >
             {isSyncing ? (
@@ -224,7 +269,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
 
           <TouchableOpacity
             style={[styles.deleteButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleDeleteUnsent(item.session_id, item.count)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteUnsent(item.session_id, item.count);
+            }}
             disabled={isProcessing}
           >
             {isDeleting ? (
@@ -234,7 +282,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -248,7 +296,11 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
       : 'Neznámé datum';
 
     return (
-      <View style={styles.errorCard}>
+      <TouchableOpacity 
+        style={styles.errorCard}
+        onPress={() => handleOpenDetail(item.session_id, true)}
+        activeOpacity={0.7}
+      >
         <View style={styles.errorHeader}>
           <View>
             <Text style={styles.sessionId}>Jízda {sessionIdShort}...</Text>
@@ -271,7 +323,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={[styles.retryButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleRetry(item.session_id)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleRetry(item.session_id);
+            }}
             disabled={isProcessing}
           >
             {isRetrying ? (
@@ -283,7 +338,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
 
           <TouchableOpacity
             style={[styles.deleteButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleDelete(item.session_id, item.count)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDelete(item.session_id, item.count);
+            }}
             disabled={isProcessing}
           >
             {isDeleting ? (
@@ -293,7 +351,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -309,17 +367,91 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
     </View>
   );
 
+  const renderDetailModal = () => {
+    if (!selectedSessionId) return null;
+
+    const sessionIdShort = selectedSessionId.substring(0, 8);
+    const isError = detailData.length > 0 && detailData[0].synced === -1;
+
+    return (
+      <Modal
+        visible={selectedSessionId !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseDetail}
+      >
+        <Pressable style={styles.modalOverlay} onPress={handleCloseDetail}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isError ? '❌ Detail chyby' : '⏳ Detail čekajících dat'}
+              </Text>
+              <TouchableOpacity onPress={handleCloseDetail} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalSessionInfo}>
+              <Text style={styles.modalSessionLabel}>ID jízdy:</Text>
+              <Text style={styles.modalSessionValue}>{selectedSessionId}</Text>
+              <Text style={styles.modalSessionShort}>({sessionIdShort}...)</Text>
+            </View>
+
+            {isLoadingDetail ? (
+              <View style={styles.modalLoading}>
+                <ActivityIndicator size="large" color="#18181b" />
+                <Text style={styles.modalLoadingText}>Načítání detailů...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.modalScrollView}>
+                <View style={styles.modalStats}>
+                  <View style={styles.modalStatItem}>
+                    <Text style={styles.modalStatLabel}>Celkem záznamů</Text>
+                    <Text style={styles.modalStatValue}>{detailData.length}</Text>
+                  </View>
+                  {detailData.length > 0 && (
+                    <>
+                      <View style={styles.modalStatItem}>
+                        <Text style={styles.modalStatLabel}>První měření</Text>
+                        <Text style={styles.modalStatValue}>
+                          {new Date(detailData[0].measured_at).toLocaleString('cs-CZ')}
+                        </Text>
+                      </View>
+                      <View style={styles.modalStatItem}>
+                        <Text style={styles.modalStatLabel}>Poslední měření</Text>
+                        <Text style={styles.modalStatValue}>
+                          {new Date(detailData[detailData.length - 1].measured_at).toLocaleString('cs-CZ')}
+                        </Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                {isError && detailData.length > 0 && detailData[0].error_message && (
+                  <View style={styles.modalErrorBox}>
+                    <Text style={styles.modalErrorLabel}>Chybová zpráva:</Text>
+                    <Text style={styles.modalErrorText}>{detailData[0].error_message}</Text>
+                    {detailData[0].error_at && (
+                      <Text style={styles.modalErrorDate}>
+                        Čas chyby: {new Date(detailData[0].error_at).toLocaleString('cs-CZ')}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← Zpět</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Neodeslaná data</Text>
-        </View>
+        <CustomHeader variant="back" onBack={() => navigation.goBack()} title="Neodeslaná data" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#18181b" />
+          <ActivityIndicator size="large" color={UIConfig.colors.foreground} />
         </View>
       </View>
     );
@@ -327,12 +459,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Zpět</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Neodeslaná data</Text>
-      </View>
+      <CustomHeader variant="back" onBack={() => navigation.goBack()} title="Neodeslaná data" />
 
       {unsentGroups.length === 0 && errorGroups.length === 0 ? (
         <View style={styles.content}>
@@ -390,6 +517,8 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
           )}
         </ScrollView>
       )}
+
+      {renderDetailModal()}
     </View>
   );
 };
@@ -397,27 +526,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
-  },
-  header: {
-    backgroundColor: '#fff',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e4e4e7',
-  },
-  backButton: {
-    marginBottom: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#3b82f6',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#18181b',
+    backgroundColor: UIConfig.colors.background,
   },
   content: {
     flex: 1,
@@ -428,46 +537,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   section: {
-    marginBottom: 24,
+    marginBottom: UIConfig.spacing.xxl,
   },
   sectionHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 8,
+    paddingHorizontal: UIConfig.spacing.xl,
+    paddingTop: UIConfig.spacing.xl,
+    paddingBottom: UIConfig.spacing.sm,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: UIConfig.fontSize.lg,
     fontWeight: 'bold',
-    color: '#18181b',
-    marginBottom: 4,
+    color: UIConfig.colors.foreground,
+    marginBottom: UIConfig.spacing.xs,
   },
   sectionSubtitle: {
-    fontSize: 14,
-    color: '#71717a',
+    fontSize: UIConfig.fontSize.sm,
+    color: UIConfig.colors.mutedForeground,
     lineHeight: 20,
   },
   infoBox: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: UIConfig.colors.warningLight,
     borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
-    padding: 16,
-    marginHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 16,
-    borderRadius: 8,
+    borderLeftColor: UIConfig.colors.warning,
+    padding: UIConfig.spacing.lg,
+    marginHorizontal: UIConfig.spacing.xl,
+    marginTop: UIConfig.spacing.sm,
+    marginBottom: UIConfig.spacing.lg,
+    borderRadius: UIConfig.borderRadius.md,
   },
   infoText: {
-    fontSize: 14,
-    color: '#92400e',
+    fontSize: UIConfig.fontSize.sm,
+    color: UIConfig.colors.warningForeground,
   },
   unsentCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 12,
+    backgroundColor: UIConfig.colors.card,
+    borderRadius: UIConfig.borderRadius.lg,
+    padding: UIConfig.spacing.lg,
+    marginHorizontal: UIConfig.spacing.xl,
+    marginBottom: UIConfig.spacing.md,
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: UIConfig.colors.input,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -475,45 +584,45 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   unsentDate: {
-    fontSize: 12,
-    color: '#71717a',
+    fontSize: UIConfig.fontSize.xs,
+    color: UIConfig.colors.mutedForeground,
   },
   unsentCountBadge: {
-    backgroundColor: '#dbeafe',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: UIConfig.colors.infoLight,
+    borderRadius: UIConfig.borderRadius.lg,
+    paddingHorizontal: UIConfig.spacing.md,
+    paddingVertical: UIConfig.spacing.sm,
   },
   unsentCountText: {
-    fontSize: 14,
+    fontSize: UIConfig.fontSize.sm,
     fontWeight: '600',
-    color: '#1e40af',
+    color: UIConfig.colors.info,
   },
   syncButton: {
     flex: 1,
-    backgroundColor: '#10b981',
-    borderRadius: 8,
-    paddingVertical: 12,
+    backgroundColor: UIConfig.colors.success,
+    borderRadius: UIConfig.borderRadius.md,
+    paddingVertical: UIConfig.spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: UIConfig.button.minHeight,
   },
   syncButtonText: {
-    fontSize: 16,
+    fontSize: UIConfig.fontSize.md,
     fontWeight: '600',
-    color: '#fff',
+    color: UIConfig.colors.primaryForeground,
   },
   listContent: {
-    padding: 20,
+    padding: UIConfig.spacing.xl,
   },
   errorCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 12,
+    backgroundColor: UIConfig.colors.card,
+    borderRadius: UIConfig.borderRadius.lg,
+    padding: UIConfig.spacing.lg,
+    marginHorizontal: UIConfig.spacing.xl,
+    marginBottom: UIConfig.spacing.md,
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: UIConfig.colors.destructiveBorder,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -524,28 +633,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: UIConfig.spacing.md,
   },
   sessionId: {
-    fontSize: 16,
+    fontSize: UIConfig.fontSize.md,
     fontWeight: '600',
-    color: '#18181b',
-    marginBottom: 4,
+    color: UIConfig.colors.foreground,
+    marginBottom: UIConfig.spacing.xs,
   },
   errorDate: {
-    fontSize: 12,
-    color: '#71717a',
+    fontSize: UIConfig.fontSize.xs,
+    color: UIConfig.colors.mutedForeground,
   },
   countBadge: {
-    backgroundColor: '#fee2e2',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: UIConfig.colors.destructiveLight,
+    borderRadius: UIConfig.borderRadius.lg,
+    paddingHorizontal: UIConfig.spacing.md,
+    paddingVertical: UIConfig.spacing.sm,
   },
   countText: {
-    fontSize: 14,
+    fontSize: UIConfig.fontSize.sm,
     fontWeight: '600',
-    color: '#dc2626',
+    color: UIConfig.colors.destructive,
   },
   errorMessageBox: {
     backgroundColor: '#fef2f2',
@@ -631,5 +740,128 @@ const styles = StyleSheet.create({
     color: '#71717a',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '90%',
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e4e4e7',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#18181b',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f4f4f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 20,
+    color: '#71717a',
+    fontWeight: 'bold',
+  },
+  modalSessionInfo: {
+    backgroundColor: '#f9fafb',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e4e4e7',
+  },
+  modalSessionLabel: {
+    fontSize: 12,
+    color: '#71717a',
+    marginBottom: 4,
+  },
+  modalSessionValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#18181b',
+    fontFamily: 'monospace',
+  },
+  modalSessionShort: {
+    fontSize: 12,
+    color: '#a1a1aa',
+    marginTop: 2,
+  },
+  modalLoading: {
+    padding: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalLoadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#71717a',
+  },
+  modalScrollView: {
+    maxHeight: '100%',
+  },
+  modalStats: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e4e4e7',
+  },
+  modalStatItem: {
+    marginBottom: 12,
+  },
+  modalStatLabel: {
+    fontSize: 12,
+    color: '#71717a',
+    marginBottom: 4,
+  },
+  modalStatValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#18181b',
+  },
+  modalErrorBox: {
+    backgroundColor: '#fef2f2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#dc2626',
+    padding: 16,
+    margin: 16,
+    marginTop: 0,
+    borderRadius: 8,
+  },
+  modalErrorLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#991b1b',
+    marginBottom: 8,
+  },
+  modalErrorText: {
+    fontSize: 14,
+    color: '#dc2626',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  modalErrorDate: {
+    fontSize: 12,
+    color: '#991b1b',
+    fontStyle: 'italic',
   },
 });

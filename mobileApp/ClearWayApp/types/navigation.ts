@@ -1,4 +1,5 @@
 export type RootStackParamList = {
+  Login: undefined;
   Home: undefined;
   Setup: undefined;
   Measurement: {
@@ -7,6 +8,7 @@ export type RootStackParamList = {
     sensorId: string;
   };
   SyncErrors: undefined;
+  Admin: undefined;
 };
 
 // Re-export types from index.ts for convenience

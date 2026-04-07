@@ -1,0 +1,16 @@
+# Grafana Dashboard Provisioning Configuration
+# Automatically loads dashboards from /var/lib/grafana/dashboards directory
+
+apiVersion: 1
+
+providers:
+  - name: 'ClearWay Dashboards'
+    orgId: 1
+    folder: 'ClearWay'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

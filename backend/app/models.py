@@ -13,6 +13,19 @@ import uuid
 from .database import Base
 
 
+class User(Base):
+    """Application users with authentication credentials and RBAC"""
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=True)
+    role: Mapped[str] = mapped_column(String(50), nullable=False, server_default=text("'dispatcher'"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
+
+
 class Sensor(Base):
     """Vehicle-mounted sensors collecting road width measurements"""
     __tablename__ = "sensors"

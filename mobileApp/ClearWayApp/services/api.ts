@@ -1,7 +1,7 @@
 import { MeasurementData } from '../components/DataDisplay';
 
 // Expo exposes EXPO_PUBLIC_* vars to app runtime.
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://db-mobile.clearway.zephyron.tech';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
 const MEASUREMENTS_ENDPOINT = '/api/v1/measurements';
 
 export interface ApiResponse {
