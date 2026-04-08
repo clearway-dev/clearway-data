@@ -9,5 +9,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 
 
 # Refuse to start in production with the default insecure key.
 _DEBUG = os.getenv("DEBUG", "false").lower() in ("1", "true", "yes")
-
+if SECRET_KEY == _DEFAULT_SECRET and not _DEBUG:
+    raise RuntimeError(
+        "SECRET_KEY is set to the insecure default. "
+        "Set the SECRET_KEY environment variable before running in production."
+    )
 
