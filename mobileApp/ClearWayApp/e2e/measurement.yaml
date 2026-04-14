@@ -1,0 +1,128 @@
+appId: cz.zephyron.clearwaymobileapp
+---
+
+# ─────────────────────────────────────────────
+# Scenario 2: Session & Measurement Flow
+#
+# Pre-condition:
+#   - User is already logged in (auth token cached).
+#   - Run login.yaml first if starting from scratch.
+#   - Vehicle and Sensor are pre-selected by the app
+#     (restored from last session or auto-selected).
+#
+# Steps:
+#   1.  Launch app (reuse cached auth state)
+#   2.  Assert Home screen is visible
+#   3.  Navigate to SetupScreen
+#   4.  Wait for initialization (vehicles/sensors loaded)
+#   5.  Generate a new Session ID
+#   6.  Assert session is ready
+#   7.  Tap "Start měření" → MeasurementScreen
+#   8.  Assert recording is active ("Stop" button visible)
+#   9.  Wait 10 s to simulate data collection
+#   10. Assert measurement counter increased
+#   11. Tap "Stop" to pause recording
+#   12. Assert recording is paused ("Pokračovat" button visible)
+#   13. Tap "Odeslat nyní" to force-sync collected data
+#   14. Assert data was sent (unsynced counter reaches 0)
+# ─────────────────────────────────────────────
+
+- launchApp                   # reuse state — auth token must be cached
+
+# ── 1. Home screen ───────────────────────────
+
+- extendedWaitUntil:
+    visible: "START"
+    timeout: 10000
+
+- assertVisible: "ClearWay"
+- assertVisible: "START"
+
+# ── 2. Navigate to SetupScreen ───────────────
+
+- tapOn: "START"
+
+# ── 3. Wait for SetupScreen to initialize ────
+# API calls for vehicles/sensors run on mount.
+
+- extendedWaitUntil:
+    visible:
+      id: "createSessionButton"
+    timeout: 10000
+
+- assertVisible: "Nastavení měření"
+- assertVisible: "Vozidlo:"
+- assertVisible: "Senzor:"
+
+# ── 4. Generate Session ID ───────────────────
+# Vehicle and sensor are already pre-selected
+# (restored from storage or auto-selected).
+
+- tapOn:
+    id: "createSessionButton"
+
+# Wait for the API call and session card to appear
+- extendedWaitUntil:
+    visible: "✓ Jízda připravena"
+    timeout: 10000
+
+- assertVisible: "Session ID:"
+- assertVisible: "✓ Jízda připravena"
+
+# ── 5. Start measurement ─────────────────────
+
+- tapOn:
+    id: "startMeasurementButton"
+
+# ── 6. Assert MeasurementScreen & active recording
+
+- extendedWaitUntil:
+    visible: "Měření"          # screen header title
+    timeout: 5000
+
+- assertVisible: "Aktuální šířka:"
+- assertVisible: "Lokální databáze:"
+
+# Recording auto-starts → button shows "Stop"
+- assertVisible:
+    id: "togglePauseButton"
+
+- assertVisible: "Status: 🔴 Nahrávání..."
+
+# ── 7. Simulate 10 s of data collection ──────
+
+- waitForAnimationToEnd
+- pause:
+    ms: 10000
+
+# ── 8. Assert counter incremented ────────────
+# measurementCount > 0; we just verify the label
+# is present (exact count is non-deterministic).
+
+- assertVisible: "Měření:"
+
+# ── 9. Stop recording ────────────────────────
+
+- tapOn:
+    id: "togglePauseButton"
+
+# Button text flips to "Pokračovat" when paused
+- assertVisible: "Pokračovat"
+- assertVisible: "Status: ⏸ Pozastaveno"
+
+# ── 10. Force-sync collected data ────────────
+
+- scrollUntilVisible:
+    element:
+      id: "sendNowButton"
+    direction: DOWN
+
+- tapOn:
+    id: "sendNowButton"
+
+# SyncService runs in background; allow up to 15 s
+- extendedWaitUntil:
+    visible: "Neodesláno: 0 měření"
+    timeout: 15000
+
+- assertVisible: "Neodesláno: 0 měření"

@@ -226,6 +226,7 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
 
         {/* Controls */}
         <Button
+          testID="togglePauseButton"
           title={isPaused ? 'Pokračovat' : 'Stop'}
           onPress={handleTogglePause}
           variant={isPaused ? 'primary' : 'secondary'}
@@ -238,6 +239,7 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
           <Text style={styles.value}>Celkem: {stats.total} měření</Text>
           <Text style={styles.value}>Neodesláno: {stats.unsynced} měření</Text>
           <Button
+            testID="sendNowButton"
             title="Odeslat nyní"
             onPress={forceSync}
             variant="secondary"
