@@ -3,14 +3,20 @@ name: Mobile App CI (Jest Tests)
 on:
   # Spustí se při každém pushi do těchto dvou větví
   push:
-    branches: 
+    branches:
       - main
       - dev
+    paths:
+      - 'mobileApp/**'
+      - '.github/workflows/test_mobileApp.yml'
   # Spustí se, když budeš chtít větve sloučit
   pull_request:
-    branches: 
+    branches:
       - main
       - dev
+    paths:
+      - 'mobileApp/**'
+      - '.github/workflows/test_mobileApp.yml'
 
 jobs:
   test:
