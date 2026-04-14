@@ -4,6 +4,7 @@ Main application entry point — app initialization, middleware, and router regi
 """
 import os
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,11 +24,24 @@ logger.add(
 )
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler for startup and shutdown logging."""
+    logger.info("=" * 50)
+    logger.info("ClearWay API Starting Up")
+    logger.info("=" * 50)
+    try:
+        yield
+    finally:
+        logger.info("ClearWay API Shutting Down")
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="ClearWay API",
     version="0.1.0",
-    description="API for road width measurement data collection and processing"
+    description="API for road width measurement data collection and processing",
+    lifespan=lifespan,
 )
 
 
@@ -137,24 +151,6 @@ app.include_router(vehicles.router)
 app.include_router(sensors.router)
 app.include_router(sessions.router)
 app.include_router(measurements.router)
-
-
-# ==============================================
-# STARTUP/SHUTDOWN EVENTS
-# ==============================================
-
-@app.on_event("startup")
-async def startup_event():
-    """Log startup information"""
-    logger.info("=" * 50)
-    logger.info("ClearWay API Starting Up")
-    logger.info("=" * 50)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Log shutdown information"""
-    logger.info("ClearWay API Shutting Down")
 
 
 # ==============================================
