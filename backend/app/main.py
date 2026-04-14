@@ -14,10 +14,10 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from .routers import auth, health, vehicles, sensors, sessions, measurements
 
 # Configure Loguru for FastAPI process
-os.makedirs("/app/logs", exist_ok=True)
+os.makedirs("logs", exist_ok=True)
 logger.remove()
 logger.add(
-    "/app/logs/fastapi.log",
+    "/logs/fastapi.log",
     rotation="10 MB",
     retention="14 days",
     level="INFO",

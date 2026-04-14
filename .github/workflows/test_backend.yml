@@ -43,4 +43,4 @@ jobs:
 
       # 4. Spusti backend testy (bez integracnich testu vyzadujicich realnou DB)
       - name: Run pytest
-        run: pytest -m "not integration" -q
+        run: pytest -q
