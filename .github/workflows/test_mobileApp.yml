@@ -1,0 +1,37 @@
+name: Mobile App CI (Jest Tests)
+
+on:
+  # Spustí se při každém pushi do těchto dvou větví
+  push:
+    branches: 
+      - main
+      - dev
+  # Spustí se, když budeš chtít větve sloučit
+  pull_request:
+    branches: 
+      - main
+      - dev
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Stáhne tvůj kód z repozitáře na virtuální server
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. Nainstaluje Node.js prostředí
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20' # Můžeš změnit na '18', pokud používáš starší verzi
+
+    # 3. Nainstaluje všechny knihovny (React Native, Expo, Jest atd.)
+    # Používáme 'npm ci' místo 'npm install', protože je to pro CI servery spolehlivější
+    - name: Install dependencies
+      run: npm ci
+
+    # 4. Spustí tvé otestované služby (api.service, database.service atd.)
+    - name: Run Jest tests
+      run: npm test

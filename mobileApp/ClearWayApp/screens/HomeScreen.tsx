@@ -52,7 +52,8 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.welcomeText}>Přihlášen jako</Text>
           <Text style={styles.userEmail}>{user?.email}</Text>
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
+          testID="logoutButton"
           style={styles.logoutButton}
           onPress={handleLogout}
           disabled={isLoggingOut}

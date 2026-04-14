@@ -230,6 +230,7 @@ export const AdminScreen: React.FC<Props> = ({ navigation }) => {
           </View>
 
           <TouchableOpacity
+            testID="createVehicleButton"
             style={[
               styles.submitButton,
               (!isVehicleFormValid() || isCreatingVehicle) &&
@@ -278,6 +279,7 @@ export const AdminScreen: React.FC<Props> = ({ navigation }) => {
           </View>
 
           <TouchableOpacity
+            testID="createSensorButton"
             style={[
               styles.submitButton,
               (!isSensorFormValid() || isCreatingSensor) &&
