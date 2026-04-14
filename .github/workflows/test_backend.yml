@@ -1,0 +1,46 @@
+name: Backend CI (Pytest)
+
+on:
+  # Spusti se pri kazdem pushi do techto vetvi, ale jen pri zmenach backendu
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test_backend.yml'
+
+  # Spusti se pri pull requestu do techto vetvi, ale jen pri zmenach backendu
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test_backend.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      # 1. Stahne kod z repozitare
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Nainstaluje Python prostredi
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 3. Nainstaluje backend zavislosti
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      # 4. Spusti backend testy (bez integracnich testu vyzadujicich realnou DB)
+      - name: Run pytest
+        run: pytest -m "not integration" -q
