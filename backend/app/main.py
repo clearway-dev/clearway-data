@@ -3,6 +3,7 @@ ClearWay FastAPI Backend
 Main application entry point — app initialization, middleware, and router registration.
 """
 import os
+import sys
 import time
 from contextlib import asynccontextmanager
 
@@ -14,14 +15,20 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from .routers import auth, health, vehicles, sensors, sessions, measurements
 
 # Configure Loguru for FastAPI process
-os.makedirs("logs", exist_ok=True)
 logger.remove()
-logger.add(
-    "/logs/fastapi.log",
-    rotation="10 MB",
-    retention="14 days",
-    level="INFO",
-)
+is_testing = os.getenv("TESTING", "false").lower() == "true"
+
+if is_testing:
+    # Avoid file-system writes in CI/test runs.
+    logger.add(sys.stderr, level="INFO")
+else:
+    os.makedirs("logs", exist_ok=True)
+    logger.add(
+        "logs/fastapi.log",
+        rotation="10 MB",
+        retention="14 days",
+        level="INFO",
+    )
 
 
 @asynccontextmanager
