@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, useColorScheme } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -17,6 +17,10 @@ interface Props {
 }
 
 export const SetupScreen: React.FC<Props> = ({ navigation }) => {
+  // Theme
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
+
   // State
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [sensors, setSensors] = useState<Sensor[]>([]);
@@ -25,7 +29,7 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  
+
   // Track the configuration for which session was created
   const [sessionVehicleId, setSessionVehicleId] = useState<string | null>(null);
   const [sessionSensorId, setSessionSensorId] = useState<string | null>(null);
@@ -45,26 +49,35 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
   useEffect(() => {
     const initialize = async () => {
       try {
-        // Load vehicles, sensors and last session in parallel
-        const [vehiclesData, sensorsData, savedSession] = await Promise.all([
+        // Load vehicles, sensors, last session and last selection in parallel
+        const [vehiclesData, sensorsData, savedSession, lastSelection] = await Promise.all([
           ApiService.getVehicles(),
           ApiService.getSensors(),
           SessionStorageService.loadSession(),
+          SessionStorageService.loadLastSelection(),
         ]);
-        
+
         setVehicles(vehiclesData);
         setSensors(sensorsData);
-        
+
+        const validVehicleIds = new Set(vehiclesData.map(v => v.id));
+        const validSensorIds = new Set(sensorsData.map(s => s.id));
+
         // If we have a saved session, restore it
         if (savedSession) {
           setSessionId(savedSession.sessionId);
           setSessionVehicleId(savedSession.vehicleId);
           setSessionSensorId(savedSession.sensorId);
-          
+
           // Pre-select the values from the session
           setSelectedVehicleId(savedSession.vehicleId);
           setSelectedSensorId(savedSession.sensorId);
           console.log('✓ Restored session from storage:', savedSession.sessionId);
+        } else if (lastSelection && validVehicleIds.has(lastSelection.vehicleId) && validSensorIds.has(lastSelection.sensorId)) {
+          // Restore last used vehicle/sensor selection (no active session)
+          setSelectedVehicleId(lastSelection.vehicleId);
+          setSelectedSensorId(lastSelection.sensorId);
+          console.log('✓ Restored last selection from storage');
         } else {
           // Otherwise auto-select first vehicle and sensor if available
           if (vehiclesData.length > 0) {
@@ -189,18 +202,24 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
         {vehicles.length > 0 ? (
           <Picker
             selectedValue={selectedVehicleId}
-            onValueChange={(value) => setSelectedVehicleId(value)}
+            onValueChange={(value) => {
+              setSelectedVehicleId(value);
+              SessionStorageService.saveLastSelection(value, selectedSensorId ?? '');
+            }}
             enabled={true}
-            style={{ color: 'black', backgroundColor: 'white' }}
-            dropdownIconColor="black"
+            style={{
+              color: isDarkMode ? '#ffffff' : '#000000',
+              backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+            }}
+            dropdownIconColor={isDarkMode ? '#ffffff' : '#000000'}
           >
             {vehicles.map(v => (
-              <Picker.Item 
-                key={v.id} 
-                label={`${v.vehicle_name} (${v.width}cm)`} 
-                value={v.id} 
+              <Picker.Item
+                key={v.id}
+                label={`${v.vehicle_name} (${v.width}cm)`}
+                value={v.id}
                 enabled={true}
-                color={Platform.OS === 'android' ? 'black' : undefined}
+                color={Platform.OS === 'android' ? (isDarkMode ? '#ffffff' : '#000000') : undefined}
               />
             ))}
           </Picker>
@@ -215,18 +234,24 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
         {sensors.length > 0 ? (
           <Picker
             selectedValue={selectedSensorId}
-            onValueChange={(value) => setSelectedSensorId(value)}
+            onValueChange={(value) => {
+              setSelectedSensorId(value);
+              SessionStorageService.saveLastSelection(selectedVehicleId ?? '', value);
+            }}
             enabled={true}
-            style={{ color: 'black', backgroundColor: 'white' }}
-            dropdownIconColor="black"
+            style={{
+              color: isDarkMode ? '#ffffff' : '#000000',
+              backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+            }}
+            dropdownIconColor={isDarkMode ? '#ffffff' : '#000000'}
           >
             {sensors.map(s => (
-              <Picker.Item 
-                key={s.id} 
-                label={s.description || `Senzor ${s.id}`} 
-                value={s.id} 
+              <Picker.Item
+                key={s.id}
+                label={s.description || `Senzor ${s.id}`}
+                value={s.id}
                 enabled={true}
-                color={Platform.OS === 'android' ? 'black' : undefined}
+                color={Platform.OS === 'android' ? (isDarkMode ? '#ffffff' : '#000000') : undefined}
               />
             ))}
           </Picker>
@@ -237,6 +262,7 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* Create Session Button */}
       <Button
+        testID="createSessionButton"
         title={isLoading ? "Vytváření jízdy..." : "Vytvořit jízdu"}
         onPress={handleCreateSession}
         disabled={isLoading || !selectedVehicleId || !selectedSensorId}
@@ -260,6 +286,7 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* Start Button */}
       <Button
+        testID="startMeasurementButton"
         title="Start měření"
         onPress={handleStartMeasurement}
         disabled={!canStartMeasurement}

@@ -53,7 +53,7 @@ MAP_MATCH_MAX_DISTANCE_M = 50.0
 MAX_GPS_ACCURACY = 25.0  # Maximum GPS accuracy to consider a point valid for map-matching
 MAX_REALISTIC_SPEED_MPS = 40.0
 # Median window for width denoising. Must be an odd number.
-WIDTH_MEDIAN_WINDOW = 3
+WIDTH_MEDIAN_WINDOW = 5
 
 celery_app = Celery(
     "clearway",

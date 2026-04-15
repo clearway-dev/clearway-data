@@ -8,6 +8,7 @@ interface ButtonProps {
   loading?: boolean;
   variant?: 'primary' | 'secondary';
   style?: ViewStyle;
+  testID?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -17,6 +18,7 @@ export const Button: React.FC<ButtonProps> = ({
   loading = false,
   variant = 'primary',
   style,
+  testID,
 }) => {
   const normalizeBoolean = (value: unknown): boolean => {
     if (typeof value === 'string') {
@@ -27,9 +29,10 @@ export const Button: React.FC<ButtonProps> = ({
 
   const isLoading = normalizeBoolean(loading);
   const isDisabled = normalizeBoolean(disabled) || isLoading;
-  
+
   return (
     <TouchableOpacity
+      testID={testID}
       style={[
         styles.button,
         variant === 'primary' ? styles.primaryButton : styles.secondaryButton,

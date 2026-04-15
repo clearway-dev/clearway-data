@@ -69,9 +69,8 @@ class VehicleCreate(VehicleBase):
 class VehicleResponse(VehicleBase):
     """Schema for vehicle response"""
     id: UUID
-    
-    class Config:
-        from_attributes = True  # Allows serialization from SQLAlchemy models
+
+    model_config = ConfigDict(from_attributes=True)  # Allows serialization from SQLAlchemy models
 
 
 # ==============================================
@@ -94,9 +93,8 @@ class SensorResponse(SensorBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==============================================
@@ -114,9 +112,8 @@ class SessionResponse(BaseModel):
     id: UUID
     sensor_id: UUID
     vehicle_id: UUID
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==============================================
@@ -152,8 +149,8 @@ class RawMeasurementCreate(BaseModel):
     speed: float = Field(..., description="Vehicle speed in m/s")
     accuracy_gps: float = Field(..., description="GPS horizontal accuracy in meters")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "session_id": "550e8400-e29b-41d4-a716-446655440000",
                 "measured_at": "2026-02-24T10:30:00.000Z",
@@ -163,6 +160,7 @@ class RawMeasurementCreate(BaseModel):
                 "distance_right": 380
             }
         }
+    )
 
 class RawMeasurementResponse(BaseModel):
     """Schema for raw measurement response"""
@@ -177,9 +175,8 @@ class RawMeasurementResponse(BaseModel):
     accuracy_gps: float
     is_valid: bool
     created_at: datetime
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==============================================
@@ -229,8 +226,8 @@ class BatchMeasurementCreate(BaseModel):
         description="List of measurements (max 10,000 per batch)"
     )
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "session_id": "550e8400-e29b-41d4-a716-446655440000",
                 "measurements": [
@@ -251,6 +248,7 @@ class BatchMeasurementCreate(BaseModel):
                 ]
             }
         }
+    )
 
 
 class BatchMeasurementCreateLax(BaseModel):

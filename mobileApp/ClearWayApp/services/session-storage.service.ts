@@ -7,7 +7,13 @@ interface SessionState {
   timestamp: number; // When the session was created
 }
 
+interface LastSelection {
+  vehicleId: string;
+  sensorId: string;
+}
+
 const SESSION_STORAGE_KEY = '@clearway/last_session';
+const LAST_SELECTION_KEY = '@clearway/last_selection';
 
 /**
  * Service for persisting and retrieving the last used session configuration
@@ -58,6 +64,32 @@ export class SessionStorageService {
       console.log('✓ Session state cleared from storage');
     } catch (error) {
       console.error('Failed to clear session state:', error);
+    }
+  }
+
+  /**
+   * Save the last selected vehicle and sensor (independent of session)
+   */
+  static async saveLastSelection(vehicleId: string, sensorId: string): Promise<void> {
+    try {
+      const selection: LastSelection = { vehicleId, sensorId };
+      await AsyncStorage.setItem(LAST_SELECTION_KEY, JSON.stringify(selection));
+    } catch (error) {
+      console.error('Failed to save last selection:', error);
+    }
+  }
+
+  /**
+   * Load the last selected vehicle and sensor
+   */
+  static async loadLastSelection(): Promise<LastSelection | null> {
+    try {
+      const stored = await AsyncStorage.getItem(LAST_SELECTION_KEY);
+      if (!stored) return null;
+      return JSON.parse(stored) as LastSelection;
+    } catch (error) {
+      console.error('Failed to load last selection:', error);
+      return null;
     }
   }
 }

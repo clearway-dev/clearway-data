@@ -7,9 +7,11 @@ dataset_part2.json
 dataset.csv
 test_validation.ps1
 test_batch.ps1
+CLAUDE.md
 MONITORING_GUIDE.md
 MONITORING_QUICKSTART.md
 MONITORING_SUMMARY.md
 MONITORING_TESTING_CHECKLIST.md
+server.yml
 
 logs/

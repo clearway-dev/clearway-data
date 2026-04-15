@@ -1,0 +1,67 @@
+appId: cz.zephyron.clearwaymobileapp
+---
+
+# ─────────────────────────────────────────────
+# Scenario 1: Authentication Flow
+#
+# Steps:
+#   1. Launch app with a fresh state (no cached token)
+#   2. Assert the Login screen is visible
+#   3. Enter email and password
+#   4. Tap the login button
+#   5. Assert the Home screen is visible
+#
+# Prerequisites:
+#   - Backend is running and reachable
+#   - Account admin@clearway.cz / admin123 exists
+# ─────────────────────────────────────────────
+
+- launchApp:
+    clearState: true          # clear AsyncStorage / SecureStore so no stale token
+
+# ── 1. Login screen is visible ───────────────
+
+- assertVisible: "ClearWay"
+- assertVisible: "Mobilní měření dat"
+- assertVisible:
+    id: "emailInput"
+- assertVisible:
+    id: "passwordInput"
+- assertVisible:
+    id: "loginButton"
+
+# ── 2. Enter credentials ─────────────────────
+
+- tapOn:
+    id: "emailInput"
+- eraseText
+- inputText: "admin@clearway.cz"
+
+- tapOn:
+    id: "passwordInput"
+- clearText
+- inputText: "admin123"
+
+- hideKeyboard
+
+# ── 3. Tap Login ─────────────────────────────
+
+- tapOn:
+    id: "loginButton"
+
+# ── 4. Wait for Home screen ──────────────────
+# App runs DB initialization and Zombie Sync
+# after successful login — allow up to 15 s.
+
+- extendedWaitUntil:
+    visible: "START"
+    timeout: 5000
+
+# ── 5. Home screen assertions ────────────────
+
+- assertVisible: "ClearWay"
+- assertVisible: "Měření průjezdnosti ulic"
+- assertVisible: "START"
+- assertVisible: "Nezpracovaná data"
+- assertVisible:
+    id: "logoutButton"

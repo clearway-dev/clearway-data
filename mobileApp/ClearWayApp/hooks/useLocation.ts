@@ -38,7 +38,7 @@ export const useLocation = (enabled: boolean) => {
   }, []); // Run only once on mount
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const startTracking = async () => {
       if (!permissionGranted) {
@@ -48,7 +48,7 @@ export const useLocation = (enabled: boolean) => {
 
       console.log('🎯 Starting GPS tracking...');
       
-      // Read GPS every 1 second (regardless of movement)
+      // Read GPS every 200 ms (5 measurements per second, regardless of movement)
       intervalId = setInterval(async () => {
         try {
           const currentLocation = await Location.getCurrentPositionAsync({
@@ -65,7 +65,7 @@ export const useLocation = (enabled: boolean) => {
           console.error('Failed to get location:', err);
           setError('Failed to get location');
         }
-      }, 1000); // 1 second interval
+      }, 200); // 200 ms interval
     };
 
     if (enabled && permissionGranted) {

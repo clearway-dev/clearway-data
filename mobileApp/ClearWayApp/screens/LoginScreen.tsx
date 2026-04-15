@@ -69,6 +69,7 @@ export const LoginScreen: React.FC = () => {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email</Text>
               <TextInput
+                testID="emailInput"
                 style={styles.input}
                 placeholder="vas@email.cz"
                 placeholderTextColor="#a1a1aa"
@@ -84,6 +85,7 @@ export const LoginScreen: React.FC = () => {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Heslo</Text>
               <TextInput
+                testID="passwordInput"
                 style={styles.input}
                 placeholder="••••••••"
                 placeholderTextColor="#a1a1aa"
@@ -98,6 +100,7 @@ export const LoginScreen: React.FC = () => {
             </View>
 
             <TouchableOpacity
+              testID="loginButton"
               style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
