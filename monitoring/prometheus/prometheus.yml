@@ -11,45 +11,45 @@ scrape_configs:
   # ============================================================================
   # FastAPI Application Metrics
   # ============================================================================
-  - job_name: 'clearway-fastapi'
+  - job_name: 'mobile-fastapi'
     static_configs:
-      - targets: ['api:8000']  # Docker service name + port
+      - targets: ['mobile_backend:8000']  # Docker container name + port
     metrics_path: '/metrics'  # Endpoint exposed by prometheus-fastapi-instrumentator
     scrape_interval: 10s  # Scrape more frequently for API metrics
     
   # ============================================================================
   # Celery Metrics via Flower
   # ============================================================================
-  - job_name: 'clearway-celery'
+  - job_name: 'mobile-celery'
     static_configs:
-      - targets: ['flower:5555']  # Docker service name + port
+      - targets: ['mobile_flower:5555']  # Docker container name + port
     metrics_path: '/metrics'  # Flower exposes Prometheus metrics on /metrics
     scrape_interval: 15s
 
   # ============================================================================
   # Celery Worker Custom Metrics
   # ============================================================================
-  - job_name: 'clearway-worker'
+  - job_name: 'mobile-worker'
     static_configs:
-      - targets: ['celery_worker:8001']  # Celery worker process metrics endpoint
+      - targets: ['mobile_celery_worker:8001']  # Celery worker process metrics endpoint
     metrics_path: '/metrics'
     scrape_interval: 15s
     
   # ============================================================================
   # PostgreSQL Database Metrics
   # ============================================================================
-  - job_name: 'clearway-postgres'
+  - job_name: 'mobile-postgres'
     static_configs:
-      - targets: ['postgres_exporter:9187']  # Docker service name + port
+      - targets: ['mobile_postgres_exporter:9187']  # Docker container name + port
     metrics_path: '/metrics'
     scrape_interval: 30s  # DB metrics change less frequently
 
   # ============================================================================
   # Container Infrastructure Metrics via cAdvisor
   # ============================================================================
-  - job_name: 'clearway-cadvisor'
+  - job_name: 'mobile-cadvisor'
     static_configs:
-      - targets: ['cadvisor:8080']  # Docker service name + cAdvisor port
+      - targets: ['mobile_cadvisor:8080']  # Docker container name + cAdvisor port
     metrics_path: '/metrics'
     scrape_interval: 15s
     

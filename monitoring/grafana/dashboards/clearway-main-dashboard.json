@@ -143,7 +143,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum by (container_label_com_docker_compose_service) (\r\n  container_memory_working_set_bytes{\r\n    job=\"clearway-cadvisor\",\r\n    container_label_com_docker_compose_project=\"clearway-data\",\r\n    container_label_com_docker_compose_service!=\"\"\r\n  }\r\n)",
+          "expr": "sum by (container_label_com_docker_compose_service) (\r\n  container_memory_working_set_bytes{\r\n    job=\"mobile-cadvisor\",\r\n    container_label_com_docker_compose_project=\"clearway-data\",\r\n    container_label_com_docker_compose_service!=\"\"\r\n  }\r\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -238,7 +238,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum by (container_label_com_docker_compose_service) (\r\n  rate(container_cpu_usage_seconds_total{\r\n    job=\"clearway-cadvisor\",\r\n    container_label_com_docker_compose_project=\"clearway-data\",\r\n    container_label_com_docker_compose_service!=\"\"\r\n  }[5m])\r\n) * 100",
+          "expr": "sum by (container_label_com_docker_compose_service) (\r\n  rate(container_cpu_usage_seconds_total{\r\n    job=\"mobile-cadvisor\",\r\n    container_label_com_docker_compose_project=\"clearway-data\",\r\n    container_label_com_docker_compose_service!=\"\"\r\n  }[5m])\r\n) * 100",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -371,7 +371,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(http_requests_total{job=\"clearway-fastapi\"}[5m])",
+          "expr": "rate(http_requests_total{job=\"mobile-fastapi\"}[5m])",
           "legendFormat": "{{method}} {{handler}} [{{status}}]",
           "range": true,
           "refId": "A"
@@ -441,7 +441,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"clearway-fastapi\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"mobile-fastapi\"}[5m])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -761,7 +761,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(flower_task_queue_length{job=\"clearway-celery\"}) OR vector(0)",
+          "expr": "sum(flower_task_queue_length{job=\"mobile-celery\"}) OR vector(0)",
           "legendFormat": "Queue Depth",
           "range": true,
           "refId": "A"
@@ -832,7 +832,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(flower_worker_online{job=\"clearway-celery\"}) OR vector(0)",
+          "expr": "sum(flower_worker_online{job=\"mobile-celery\"}) OR vector(0)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -941,7 +941,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (state) (pg_stat_activity_count{job=\"clearway-postgres\"})",
+          "expr": "sum by (state) (pg_stat_activity_count{job=\"mobile-postgres\"})",
           "legendFormat": "{{state}}",
           "range": true,
           "refId": "A"
@@ -1008,7 +1008,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(pg_stat_database_blks_hit{job=\"clearway-postgres\", datname=\"clearway\"}[5m]) / (rate(pg_stat_database_blks_hit{job=\"clearway-postgres\", datname=\"clearway\"}[5m]) + rate(pg_stat_database_blks_read{job=\"clearway-postgres\", datname=\"clearway\"}[5m]))",
+          "expr": "rate(pg_stat_database_blks_hit{job=\"mobile-postgres\", datname=\"clearway\"}[5m]) / (rate(pg_stat_database_blks_hit{job=\"mobile-postgres\", datname=\"clearway\"}[5m]) + rate(pg_stat_database_blks_read{job=\"mobile-postgres\", datname=\"clearway\"}[5m]))",
           "legendFormat": "Cache Hit Ratio",
           "range": true,
           "refId": "A"
@@ -1072,7 +1072,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "pg_stat_user_tables_n_live_tup{job=\"clearway-postgres\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{job=\"mobile-postgres\"}",
           "format": "time_series",
           "legendFormat": "{{relname}}",
           "range": true,
@@ -1166,7 +1166,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(pg_stat_user_tables_seq_scan{job=\"clearway-postgres\"}[5m]) * rate(pg_stat_user_tables_seq_tup_read{job=\"clearway-postgres\"}[5m])",
+          "expr": "rate(pg_stat_user_tables_seq_scan{job=\"mobile-postgres\"}[5m]) * rate(pg_stat_user_tables_seq_tup_read{job=\"mobile-postgres\"}[5m])",
           "legendFormat": "{{relname}} - Sequential Scans",
           "refId": "A"
         }
@@ -1297,7 +1297,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (reason) (clearway_invalid_measurements_total{job=\"clearway-worker\"})",
+          "expr": "sum by (reason) (clearway_invalid_measurements_total{job=\"mobile-worker\"})",
           "legendFormat": "{{reason}}",
           "range": true,
           "refId": "A"
