@@ -38,7 +38,7 @@ export const useLocation = (enabled: boolean) => {
   }, []); // Run only once on mount
 
   useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
 
     const startTracking = async () => {
       if (!permissionGranted) {
