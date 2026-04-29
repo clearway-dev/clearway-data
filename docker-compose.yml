@@ -44,21 +44,35 @@ services:
   celery_worker:
     build:
       context: ./backend
-    container_name: mobile_celery_worker
+    # No container_name — allows horizontal scaling via: docker compose up --scale celery_worker=N
     volumes:
       - ./backend:/app
       - ./logs:/app/logs
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
       CELERY_BROKER_URL: redis://mobile_redis:6379/0
-      CELERY_RESULT_BACKEND: redis://mobile_redis:6379/0
+      CELERY_RESULT_BACKEND: redis://mobile_redis:6379/1
       WORKER_METRICS_PORT: 8001
+      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
     env_file:
       - .env
-    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
+    command: >
+      celery -A app.worker.celery_app worker
+      --loglevel=info
+      --pool=prefork
+      --concurrency=${CELERY_CONCURRENCY:-2}
+      --max-tasks-per-child=200
+      --max-memory-per-child=400000
+      -E
     restart: unless-stopped
     depends_on:
       - redis
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+        reservations:
+          memory: 512M
     networks:
       - clearway-network
 
