@@ -28,10 +28,29 @@ scrape_configs:
 
   # ============================================================================
   # Celery Worker Custom Metrics
+  # Uses Docker service discovery so all scaled worker instances are scraped
+  # automatically — no fixed container_name required.
   # ============================================================================
   - job_name: 'mobile-worker'
-    static_configs:
-      - targets: ['mobile_celery_worker:8001']  # Celery worker process metrics endpoint
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        filters:
+          - name: label
+            values: ['com.docker.compose.service=celery_worker']
+    relabel_configs:
+      # Keep only containers whose compose service label is celery_worker
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        action: keep
+        regex: celery_worker
+      # Replace the auto-detected port with the metrics port 8001
+      - source_labels: [__address__]
+        regex: '([^:]+):.*'
+        replacement: '${1}:8001'
+        target_label: __address__
+      # Use container name as the instance label (e.g. clearway-data-celery_worker-1)
+      - source_labels: [__meta_docker_container_name]
+        regex: '/?(.*)'
+        target_label: instance
     metrics_path: '/metrics'
     scrape_interval: 15s
     

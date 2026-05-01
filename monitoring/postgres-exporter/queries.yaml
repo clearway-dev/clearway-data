@@ -1,0 +1,32 @@
+pg_clearway_tables:
+  query: |
+    SELECT
+      n.nspname    AS schemaname,
+      c.relname,
+      GREATEST(c.reltuples::bigint, 0)   AS row_estimate,
+      pg_total_relation_size(c.oid)      AS total_bytes,
+      pg_relation_size(c.oid)            AS table_bytes,
+      pg_indexes_size(c.oid)             AS indexes_bytes
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relkind = 'r'
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Schema name"
+    - relname:
+        usage: "LABEL"
+        description: "Table name"
+    - row_estimate:
+        usage: "GAUGE"
+        description: "Estimated row count (pg_class.reltuples, updated by ANALYZE/VACUUM)"
+    - total_bytes:
+        usage: "GAUGE"
+        description: "Total disk space including indexes and TOAST (bytes)"
+    - table_bytes:
+        usage: "GAUGE"
+        description: "Table data size excluding indexes (bytes)"
+    - indexes_bytes:
+        usage: "GAUGE"
+        description: "Total size of all indexes (bytes)"

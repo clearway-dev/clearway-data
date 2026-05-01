@@ -1037,7 +1037,7 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "bytes"
         },
         "overrides": []
       },
@@ -1072,14 +1072,74 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "pg_stat_user_tables_n_live_tup{job=\"mobile-postgres\"}",
+          "expr": "pg_clearway_tables_total_bytes{job=\"mobile-postgres\"}",
           "format": "time_series",
           "legendFormat": "{{relname}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "PostgreSQL Table Sizes (Estimated)",
+      "title": "PostgreSQL Table Disk Usage",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "id": 91,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "pg_clearway_tables_row_estimate{job=\"mobile-postgres\"}",
+          "format": "time_series",
+          "legendFormat": "{{relname}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "PostgreSQL Table Row Count (estimate — run ANALYZE to refresh)",
       "type": "bargauge"
     },
     {
@@ -1166,7 +1226,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(pg_stat_user_tables_seq_scan{job=\"mobile-postgres\"}[5m]) * rate(pg_stat_user_tables_seq_tup_read{job=\"mobile-postgres\"}[5m])",
+          "expr": "rate(pg_stat_user_tables_seq_scan{job=\"mobile-postgres\", schemaname=\"public\"}[5m]) * rate(pg_stat_user_tables_seq_tup_read{job=\"mobile-postgres\", schemaname=\"public\"}[5m])",
           "legendFormat": "{{relname}} - Sequential Scans",
           "refId": "A"
         }
