@@ -17,8 +17,12 @@ if not SQLALCHEMY_DATABASE_URL:
 
 # Vytvoření SQLAlchemy Engine
 # Engine je hlavní vstupní bod pro spojení s databází
-engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
-
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, 
+    pool_pre_ping=True,
+    pool_size=50,       # Nový základ: 50 stabilních spojení (místo 5)
+    max_overflow=100    # Nová nouzovka: Až 100 dalších při nárazu (místo 10)
+)
 # Vytvoření továrny na databázové sessions
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
