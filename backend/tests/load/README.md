@@ -56,7 +56,7 @@ export LOAD_TEST_PASS="your-password"
 
 Run all commands from the `backend/` directory.
 
-locust -f tests/load/locustfile.py --host=http://localhost:800
+locust -f tests/load/locustfile.py --host=http://localhost:8000
 
 ---
 

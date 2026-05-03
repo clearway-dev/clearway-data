@@ -42,3 +42,17 @@ active_sessions = Gauge(
     "clearway_active_sessions",
     "Počet aktuálně aktivních měřicích session v systému"
 )
+
+# ===========================================================================================
+# PRE-INICIALIZACE LABEL SERIES
+# prometheus_client exportuje label series POUZE pokud byla alespoň jednou zavolána
+# .labels(...). Bez pre-inicializace counter nemá žádné řádky v /metrics dokud
+# není zpracován první batch — Grafana pak zobrazí "No data" místo nuly.
+# ===========================================================================================
+
+for _status in ("pending", "completed", "failed"):
+    batches_received_total.labels(status=_status)
+
+for _reason in ("logical_validation", "gps_jump_duplicate_timestamp",
+                "gps_jump_unrealistic_speed", "map_matching_failed"):
+    invalid_measurements_total.labels(reason=_reason)

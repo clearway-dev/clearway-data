@@ -44,7 +44,9 @@ services:
   celery_worker:
     build:
       context: ./backend
-    # No container_name — allows horizontal scaling via: docker compose up --scale celery_worker=N
+    container_name: mobile_celery_worker
+    expose:
+      - "8001"  # Prometheus metrics endpoint
     volumes:
       - ./backend:/app
       - ./logs:/app/logs
@@ -54,16 +56,14 @@ services:
       CELERY_RESULT_BACKEND: redis://mobile_redis:6379/1
       WORKER_METRICS_PORT: 8001
       CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
     env_file:
       - .env
     command: >
-      celery -A app.worker.celery_app worker
-      --loglevel=info
-      --pool=prefork
-      --concurrency=${CELERY_CONCURRENCY:-2}
-      --max-tasks-per-child=200
-      --max-memory-per-child=400000
-      -E
+      sh -c "rm -rf /tmp/prometheus_multiproc && mkdir -p /tmp/prometheus_multiproc
+      && celery -A app.worker.celery_app worker --loglevel=info --pool=prefork
+      --concurrency=${CELERY_CONCURRENCY:-2} --max-tasks-per-child=200
+      --max-memory-per-child=400000 -E"
     restart: unless-stopped
     depends_on:
       - redis

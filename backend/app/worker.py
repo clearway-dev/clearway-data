@@ -107,12 +107,24 @@ def setup_worker_logger(**kwargs):
         level="INFO",
     )
 
-    # Expose worker-local Prometheus metrics for scraping by Prometheus.
-    # With current compose setup worker runs with concurrency=1, so a single
-    # task process owns counters and exposes them on one endpoint.
+    # Expose Prometheus metrics via HTTP.
+    # With PROMETHEUS_MULTIPROC_DIR set, each forked child writes its counters to
+    # shared files; the one child that wins the port serves aggregated metrics
+    # from ALL children via MultiProcessCollector.
     if not _worker_metrics_server_started:
         try:
-            start_http_server(WORKER_METRICS_PORT)
+            multiproc_dir = os.getenv("PROMETHEUS_MULTIPROC_DIR")
+            if multiproc_dir:
+                from prometheus_client import CollectorRegistry
+                from prometheus_client.multiprocess import MultiProcessCollector
+
+                os.makedirs(multiproc_dir, exist_ok=True)
+                registry = CollectorRegistry()
+                MultiProcessCollector(registry)
+                start_http_server(WORKER_METRICS_PORT, registry=registry)
+            else:
+                start_http_server(WORKER_METRICS_PORT)
+
             _worker_metrics_server_started = True
             logger.info(
                 f"Celery worker metrics endpoint started on :{WORKER_METRICS_PORT}/metrics"
