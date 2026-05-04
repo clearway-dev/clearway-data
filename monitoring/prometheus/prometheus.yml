@@ -31,7 +31,7 @@ scrape_configs:
   # ============================================================================
   - job_name: 'mobile-worker'
     static_configs:
-      - targets: ['mobile_celery_worker:8001']  # Celery worker process metrics endpoint
+      - targets: ['mobile_celery_worker:8001']  # container_name from docker-compose
     metrics_path: '/metrics'
     scrape_interval: 15s
     

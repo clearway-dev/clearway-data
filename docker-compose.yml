@@ -45,20 +45,34 @@ services:
     build:
       context: ./backend
     container_name: mobile_celery_worker
+    expose:
+      - "8001"  # Prometheus metrics endpoint
     volumes:
       - ./backend:/app
       - ./logs:/app/logs
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
       CELERY_BROKER_URL: redis://mobile_redis:6379/0
-      CELERY_RESULT_BACKEND: redis://mobile_redis:6379/0
+      CELERY_RESULT_BACKEND: redis://mobile_redis:6379/1
       WORKER_METRICS_PORT: 8001
+      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
     env_file:
       - .env
-    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
+    command: >
+      sh -c "rm -rf /tmp/prometheus_multiproc && mkdir -p /tmp/prometheus_multiproc
+      && celery -A app.worker.celery_app worker --loglevel=info --pool=prefork
+      --concurrency=${CELERY_CONCURRENCY:-2} --max-tasks-per-child=200
+      --max-memory-per-child=400000 -E"
     restart: unless-stopped
     depends_on:
       - redis
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+        reservations:
+          memory: 512M
     networks:
       - clearway-network
 
@@ -100,6 +114,7 @@ services:
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -116,9 +131,12 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.2
     container_name: mobile_cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg
     volumes:
       - /:/rootfs:ro
-      - /var/run:/var/run:ro
+      - /var/run:/var/run:rw
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
     restart: unless-stopped
@@ -158,6 +176,10 @@ services:
       - "9187:9187"  # Postgres exporter metrics endpoint
     environment:
       DATA_SOURCE_NAME: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
+    volumes:
+      - ./monitoring/postgres-exporter/queries.yaml:/queries.yaml:ro
+    command:
+      - "--extend.query-path=/queries.yaml"
     env_file:
       - .env
     restart: unless-stopped

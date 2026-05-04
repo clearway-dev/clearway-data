@@ -61,6 +61,38 @@ celery_app = Celery(
     backend=CELERY_RESULT_BACKEND,
 )
 
+celery_app.conf.update(
+    # Serializace
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    timezone="UTC",
+    enable_utc=True,
+
+    # Spolehlivost — globální výchozí hodnoty (přepisují se dekorátorem na tasku)
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    task_track_started=True,
+
+    # Prefetch: worker si bere jen 1 task najednou — klíčové pro dlouhé batch úlohy
+    worker_prefetch_multiplier=1,
+
+    # Time limity: soft → graceful SIGTERM, hard → SIGKILL
+    task_soft_time_limit=270,
+    task_time_limit=300,
+
+    # Výsledky: ukládáme (potřebujeme status), ale po 1h z Redis zmizí
+    task_ignore_result=False,
+    result_expires=3600,
+
+    # Redis broker: visibility_timeout musí být >= task_time_limit
+    # Pokud worker nestihne task za 600s, Redis ho vrátí do fronty (re-queue)
+    broker_transport_options={
+        "visibility_timeout": 600,
+        "retry_policy": {"timeout": 5.0},
+    },
+)
+
 
 @worker_process_init.connect
 def setup_worker_logger(**kwargs):
@@ -75,12 +107,24 @@ def setup_worker_logger(**kwargs):
         level="INFO",
     )
 
-    # Expose worker-local Prometheus metrics for scraping by Prometheus.
-    # With current compose setup worker runs with concurrency=1, so a single
-    # task process owns counters and exposes them on one endpoint.
+    # Expose Prometheus metrics via HTTP.
+    # With PROMETHEUS_MULTIPROC_DIR set, each forked child writes its counters to
+    # shared files; the one child that wins the port serves aggregated metrics
+    # from ALL children via MultiProcessCollector.
     if not _worker_metrics_server_started:
         try:
-            start_http_server(WORKER_METRICS_PORT)
+            multiproc_dir = os.getenv("PROMETHEUS_MULTIPROC_DIR")
+            if multiproc_dir:
+                from prometheus_client import CollectorRegistry
+                from prometheus_client.multiprocess import MultiProcessCollector
+
+                os.makedirs(multiproc_dir, exist_ok=True)
+                registry = CollectorRegistry()
+                MultiProcessCollector(registry)
+                start_http_server(WORKER_METRICS_PORT, registry=registry)
+            else:
+                start_http_server(WORKER_METRICS_PORT)
+
             _worker_metrics_server_started = True
             logger.info(
                 f"Celery worker metrics endpoint started on :{WORKER_METRICS_PORT}/metrics"
