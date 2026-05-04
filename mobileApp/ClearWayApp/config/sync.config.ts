@@ -17,9 +17,9 @@ export const SyncConfig = {
    * Sync interval in milliseconds
    * How often the background worker checks for unsynced measurements
    * 
-   * @default 10000 (10 seconds)
+   * @default 30000 (30 seconds)
    */
-  SYNC_INTERVAL_MS: 10000,
+  SYNC_INTERVAL_MS: 30000,
 
   /**
    * How long to wait before retrying after a failed sync (in milliseconds)
