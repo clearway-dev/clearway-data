@@ -1,10 +1,10 @@
 /**
- * useLocation — GPS permission request and 5 Hz polling lifecycle.
+ * useLocation — GPS permission request and sequential polling lifecycle.
  *
  * Tests verify:
  * - Permission is requested on mount (regardless of enabled flag)
- * - Tracking interval starts only when both enabled=true AND permission granted
- * - Interval is cleaned up on unmount or when enabled flips to false
+ * - Polling starts only when both enabled=true AND permission granted
+ * - Pending polling timeout is cleaned up on unmount or when enabled flips to false
  * - Location state updates after a successful getCurrentPositionAsync call
  * - Error state is set when permission is denied or GPS call fails
  */
@@ -12,11 +12,21 @@
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useLocation } from '../../hooks/useLocation';
 
+jest.mock('../../config/measurement.config', () => ({
+  MeasurementConfig: {
+    locationTrackingIntervalMs: 100000,
+    enableLocationMetrics: false,
+    locationMetricsWindowMs: 5000,
+    preferPolling: true,
+  },
+}));
+
 // ── expo-location mock ────────────────────────────────────────────────────────
 
 jest.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: jest.fn(),
   getCurrentPositionAsync: jest.fn(),
+  watchPositionAsync: jest.fn(),
   Accuracy: { BestForNavigation: 6 },
 }));
 
@@ -30,7 +40,7 @@ const denyPermission = () => {
   (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
 };
 
-const mockPosition = (lat = 50.0, lon = 14.0) => {
+const mockCurrentPosition = (lat = 50.0, lon = 14.0) => {
   (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
     coords: { latitude: lat, longitude: lon, accuracy: 5, speed: 10 },
   });
@@ -40,17 +50,11 @@ const mockPosition = (lat = 50.0, lon = 14.0) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.useFakeTimers();
-});
-
-afterEach(() => {
-  jest.useRealTimers();
 });
 
 describe('useLocation — permission handling', () => {
   it('requests foreground location permission on mount', async () => {
     grantPermission();
-    mockPosition();
 
     renderHook(() => useLocation(false));
 
@@ -61,7 +65,6 @@ describe('useLocation — permission handling', () => {
 
   it('sets permissionGranted=true when permission is granted', async () => {
     grantPermission();
-    mockPosition();
 
     const { result } = renderHook(() => useLocation(false));
 
@@ -83,22 +86,20 @@ describe('useLocation — permission handling', () => {
 });
 
 describe('useLocation — tracking lifecycle', () => {
-  it('does NOT start the GPS interval when enabled=false (even if permission granted)', async () => {
+  it('does NOT start tracking when enabled=false (even if permission granted)', async () => {
     grantPermission();
-    mockPosition();
+    mockCurrentPosition();
 
     renderHook(() => useLocation(false));
 
     await waitFor(() => {}); // flush permission effect
 
-    jest.advanceTimersByTime(3000);
-
     expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
   });
 
-  it('starts the GPS interval when enabled=true and permission is granted', async () => {
+  it('starts tracking when enabled=true and permission is granted', async () => {
     grantPermission();
-    mockPosition();
+    mockCurrentPosition();
 
     const { result } = renderHook(() => useLocation(true));
 
@@ -107,18 +108,16 @@ describe('useLocation — tracking lifecycle', () => {
       expect(result.current.permissionGranted).toBe(true);
     });
 
-    // Now the tracking effect has registered the interval — advance past 200 ms
     await act(async () => {
-      jest.advanceTimersByTime(200);
       await Promise.resolve();
     });
 
     expect(Location.getCurrentPositionAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('updates location state with GPS coords on each tick', async () => {
+  it('updates location state with GPS coords from polling', async () => {
     grantPermission();
-    mockPosition(49.5, 13.5);
+    mockCurrentPosition(49.5, 13.5);
 
     const { result } = renderHook(() => useLocation(true));
 
@@ -127,7 +126,6 @@ describe('useLocation — tracking lifecycle', () => {
     });
 
     await act(async () => {
-      jest.advanceTimersByTime(200);
       await Promise.resolve();
     });
 
@@ -148,7 +146,7 @@ describe('useLocation — tracking lifecycle', () => {
     await waitFor(() => {});
 
     await act(async () => {
-      jest.advanceTimersByTime(200);
+      await Promise.resolve();
     });
 
     await waitFor(() => {
@@ -156,26 +154,21 @@ describe('useLocation — tracking lifecycle', () => {
     });
   });
 
-  it('clears the interval on unmount so no further GPS calls happen', async () => {
+  it('stops polling on unmount so no further GPS updates happen', async () => {
     grantPermission();
-    mockPosition();
+    mockCurrentPosition();
 
     const { result, unmount } = renderHook(() => useLocation(true));
 
-    // Wait for permission so the interval is registered
+    // Wait for permission so polling starts
     await waitFor(() => expect(result.current.permissionGranted).toBe(true));
 
-    // Allow one tick so we know the interval works
     await act(async () => {
-      jest.advanceTimersByTime(200);
       await Promise.resolve();
     });
-    const callsAfterOneTick = (Location.getCurrentPositionAsync as jest.Mock).mock.calls.length;
 
     unmount();
 
-    // Advance further — no new calls after unmount
-    jest.advanceTimersByTime(5000);
-    expect(Location.getCurrentPositionAsync).toHaveBeenCalledTimes(callsAfterOneTick);
+    expect(Location.getCurrentPositionAsync).toHaveBeenCalledTimes(1);
   });
 });

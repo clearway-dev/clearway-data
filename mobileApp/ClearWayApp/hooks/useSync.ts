@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { SyncService } from '../services/sync.service';
 import { DatabaseService } from '../services/database.service';
+import { SyncConfig } from '../config/sync.config';
 
 export const useSync = (enabled: boolean) => {
   const [stats, setStats] = useState({ total: 0, unsynced: 0 });
 
   useEffect(() => {
     if (enabled) {
-      SyncService.startSync(10000); // 10 seconds
+      SyncService.startSync(SyncConfig.SYNC_INTERVAL_MS); 
     } else {
       SyncService.stopSync();
     }

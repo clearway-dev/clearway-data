@@ -48,17 +48,6 @@ const simulateDistances = (): { distance_left: number; distance_right: number } 
   };
 };
 
-// ❌ VYPNUTO: Simulace speed a accuracy - používáme jen reálná GPS data
-// const simulateSpeed = () => {
-//   // 5-15 m/s (~18-54 km/h) for realistic city driving simulation
-//   return Math.random() * 10 + 5;
-// };
-
-// const simulateGpsAccuracy = () => {
-//   // Typical mobile GPS horizontal accuracy in meters
-//   return Math.random() * 12 + 3;
-// };
-
 export const useMeasurement = (sessionId: string | null) => {
   const [isRecording, setIsRecording] = useState(false);
   const [measurementCount, setMeasurementCount] = useState(0);
@@ -134,27 +123,25 @@ export const useMeasurement = (sessionId: string | null) => {
 
           const { distance_left, distance_right } = distances;
           
-          // ❌ VYPNUTO: Simulace rychlosti a přesnosti - používáme jen reálná data z GPS
-          // const speed = location.speed != null && location.speed >= 0 ? location.speed : simulateSpeed();
-          // const accuracy_gps = location.accuracy ?? simulateGpsAccuracy();
-          
-          // ✅ Posílat pouze reálné hodnoty z GPS (může být null/undefined)
+          // Posílat pouze reálné hodnoty z GPS (může být null/undefined)
           const speed = location.speed != null && location.speed >= 0 ? location.speed : null;
           const accuracy_gps = location.accuracy ?? null;
 
-          await DatabaseService.insertMeasurement({
-            session_id: sessionId,
-            measured_at: new Date().toISOString(),
-            latitude: location.latitude,
-            longitude: location.longitude,
-            distance_left,
-            distance_right,
-            speed,
-            accuracy_gps,
-          });
+              // Fire-and-forget insert to avoid blocking location callbacks.
+              DatabaseService.insertMeasurement({
+                session_id: sessionId,
+                measured_at: new Date().toISOString(),
+                latitude: location.latitude,
+                longitude: location.longitude,
+                distance_left,
+                distance_right,
+                speed,
+                accuracy_gps,
+              }).catch(err => console.error('Failed to insert measurement (async):', err));
 
-          setLastMeasurement({ distance_left, distance_right });
-          setMeasurementCount(prev => prev + 1);
+              // Update UI counters immediately (DB insert happens in background)
+              setLastMeasurement({ distance_left, distance_right });
+              setMeasurementCount(prev => prev + 1);
         } catch (error) {
           console.error('Failed to save measurement:', error);
         }

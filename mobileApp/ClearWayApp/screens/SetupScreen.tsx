@@ -203,8 +203,9 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
           <Picker
             selectedValue={selectedVehicleId}
             onValueChange={(value) => {
-              setSelectedVehicleId(value);
-              SessionStorageService.saveLastSelection(value, selectedSensorId ?? '');
+              const nextVehicleId = value ?? '';
+              setSelectedVehicleId(nextVehicleId);
+              SessionStorageService.saveLastSelection(nextVehicleId, selectedSensorId ?? '');
             }}
             enabled={true}
             style={{
@@ -235,8 +236,9 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
           <Picker
             selectedValue={selectedSensorId}
             onValueChange={(value) => {
-              setSelectedSensorId(value);
-              SessionStorageService.saveLastSelection(selectedVehicleId ?? '', value);
+              const nextSensorId = value ?? '';
+              setSelectedSensorId(nextSensorId);
+              SessionStorageService.saveLastSelection(selectedVehicleId ?? '', nextSensorId);
             }}
             enabled={true}
             style={{
