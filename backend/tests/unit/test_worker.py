@@ -34,8 +34,8 @@ def _make_measurement(**kwargs):
     defaults = dict(
         distance_left=1.5,
         distance_right=1.5,
-        latitude=50.0,
-        longitude=14.0,
+        latitude=49.75,
+        longitude=13.38,
         speed=10.0,
         accuracy_gps=5.0,
     )
@@ -88,8 +88,12 @@ class TestValidateMeasurementLogic:
         assert any("latitude" in e for e in errors)
 
     def test_latitude_boundary_values_are_valid(self):
-        assert _validate_measurement_logic(_make_measurement(latitude=90.0)) == []
-        assert _validate_measurement_logic(_make_measurement(latitude=-90.0)) == []
+        assert _validate_measurement_logic(_make_measurement(latitude=49.68)) == []
+        assert _validate_measurement_logic(_make_measurement(latitude=49.81)) == []
+
+    def test_latitude_outside_pilsen_is_invalid(self):
+        errors = _validate_measurement_logic(_make_measurement(latitude=90.0))
+        assert any("latitude" in e for e in errors)
 
     def test_longitude_out_of_range(self):
         m = _make_measurement(longitude=181.0)
@@ -97,8 +101,12 @@ class TestValidateMeasurementLogic:
         assert any("longitude" in e for e in errors)
 
     def test_longitude_boundary_values_are_valid(self):
-        assert _validate_measurement_logic(_make_measurement(longitude=180.0)) == []
-        assert _validate_measurement_logic(_make_measurement(longitude=-180.0)) == []
+        assert _validate_measurement_logic(_make_measurement(longitude=13.30)) == []
+        assert _validate_measurement_logic(_make_measurement(longitude=13.47)) == []
+
+    def test_longitude_outside_pilsen_is_invalid(self):
+        errors = _validate_measurement_logic(_make_measurement(longitude=180.0))
+        assert any("longitude" in e for e in errors)
 
     def test_negative_speed(self):
         m = _make_measurement(speed=-1.0)
@@ -333,8 +341,8 @@ def _batch_ns(status="pending"):
 
 def _valid_measurement_ns(
     id=1,
-    lat=50.075,
-    lon=14.437,
+    lat=49.75,
+    lon=13.38,
     dist_left=1.2,
     dist_right=1.3,
     ts=None,
@@ -595,10 +603,10 @@ class TestProcessBatchTaskPhase2:
     def test_heading_calculated_for_consecutive_measurements(self):
         """Second measurement should get a heading calculated from the first."""
         batch = _batch_ns()
-        m1 = _valid_measurement_ns(id=1, lat=50.0, lon=14.0, ts=_TS_BASE)
+        m1 = _valid_measurement_ns(id=1, lat=49.75, lon=13.38, ts=_TS_BASE)
         # Points ~7 m apart in 1 s → 7 m/s << MAX_REALISTIC_SPEED_MPS (40)
         m2 = _valid_measurement_ns(
-            id=2, lat=50.00005, lon=14.00005,
+            id=2, lat=49.75005, lon=13.38005,
             ts=datetime(2024, 6, 1, 10, 0, 1, tzinfo=timezone.utc),
         )
 
