@@ -13,6 +13,15 @@ from jose import JWTError
 
 from app.core.security import create_access_token
 from app.deps import get_current_active_user, get_current_user, require_admin
+import app.deps as deps_module
+
+
+@pytest.fixture(autouse=True)
+def clear_user_cache():
+    """Clear the in-memory user cache before every test for isolation."""
+    deps_module._user_cache.clear()
+    yield
+    deps_module._user_cache.clear()
 
 
 # ---------------------------------------------------------------------------
