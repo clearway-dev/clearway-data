@@ -1,3 +1,4 @@
+import time
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
@@ -9,6 +10,11 @@ from app.models import User
 from app.schemas import TokenData
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/access-token")
+
+# Cache: email → (User, timestamp). TTL 300 s — po 5 minutách se znovu ověří v DB.
+# Deaktivace uživatele se projeví nejpozději po uplynutí TTL.
+_user_cache: dict[str, tuple[User, float]] = {}
+_USER_CACHE_TTL = 300
 
 
 def get_current_user(
@@ -31,9 +37,15 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
 
+    cached = _user_cache.get(token_data.email)
+    if cached and time.time() - cached[1] < _USER_CACHE_TTL:
+        return cached[0]
+
     user = db.query(User).filter(User.email == token_data.email).first()
     if user is None:
         raise credentials_exception
+
+    _user_cache[token_data.email] = (user, time.time())
     return user
 
 

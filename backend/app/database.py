@@ -20,8 +20,8 @@ if not SQLALCHEMY_DATABASE_URL:
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, 
     pool_pre_ping=True,
-    pool_size=50,       # Nový základ: 50 stabilních spojení (místo 5)
-    max_overflow=100    # Nová nouzovka: Až 100 dalších při nárazu (místo 10)
+    pool_size=10,       # Nový základ: 10 stabilních spojení
+    max_overflow=20    # Nová nouzovka: Až 20 dalších při nárazu 
 )
 # Vytvoření továrny na databázové sessions
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

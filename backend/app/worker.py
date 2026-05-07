@@ -52,6 +52,7 @@ _worker_metrics_server_started = False
 MAP_MATCH_MAX_DISTANCE_M = 50.0
 MAX_GPS_ACCURACY = 25.0  # Maximum GPS accuracy to consider a point valid for map-matching
 MAX_REALISTIC_SPEED_MPS = 40.0
+MIN_VALID_SPEED_MPS = 0.1  # below 0.1 m/s treated as sensor noise / GPS glitch
 # Median window for width denoising. Must be an odd number.
 WIDTH_MEDIAN_WINDOW = 5
 
@@ -158,8 +159,14 @@ def _validate_measurement_logic(measurement: models.RawMeasurement) -> list[str]
     if not (-180.0 <= measurement.longitude <= 180.0):
         errors.append(f"longitude out of range [-180, 180] (got {measurement.longitude})")
 
-    if measurement.speed is not None and measurement.speed < 0:
-        errors.append(f"speed must be >= 0 (got {measurement.speed})")
+    if not (49.68 <= measurement.latitude <= 49.81):
+        errors.append(f"latitude out of range [49.68, 49.81] Pilsner (got {measurement.latitude})")
+
+    if not (13.30 <= measurement.longitude <= 13.47):
+        errors.append(f"longitude out of range [13.30, 13.47] Pilsner(got {measurement.longitude})")    
+
+    if measurement.speed is not None and measurement.speed < MIN_VALID_SPEED_MPS:
+        errors.append(f"speed must be >= {MIN_VALID_SPEED_MPS} m/s (got {measurement.speed})")
 
     if measurement.accuracy_gps is not None and measurement.accuracy_gps < 0:
         errors.append(f"accuracy_gps must be >= 0 (got {measurement.accuracy_gps})")
