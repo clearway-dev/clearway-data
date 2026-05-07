@@ -33,7 +33,7 @@ services:
     container_name: mobile_redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 512mb --maxmemory-policy noeviction 
     restart: unless-stopped
     networks:
       - clearway-network
