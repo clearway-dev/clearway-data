@@ -31,10 +31,10 @@ _MOCK_SESSION = SimpleNamespace(id=_SESSION_ID)
 
 _MOCK_MEASUREMENT = SimpleNamespace(
     id=1,
-    session_id=_SESSION_ID,
+    batch_id=_BATCH_ID,
     measured_at=_NOW,
     latitude=49.8175,
-    longitude=15.4730,
+    longitude=13.3776,
     distance_left=250.0,
     distance_right=380.0,
     speed=13.5,

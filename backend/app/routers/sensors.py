@@ -17,7 +17,7 @@ async def get_sensors(
     current_user: models.User = Depends(get_current_active_user)
 ):
     """
-    Get list of all sensors
+    Get list of all active sensors.
 
     Requires: Active user authentication
     """

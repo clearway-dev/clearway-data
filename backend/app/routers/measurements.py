@@ -23,7 +23,10 @@ async def get_recent_measurements(
 ):
     """
     Get recent measurements for debugging/monitoring.
-    Returns the most recent measurements ordered by timestamp.
+    Returns the most recent measurements ordered by timestamp (newest first).
+
+    Query params:
+        limit: maximum number of records to return (default 100)
 
     Requires: Active user authentication
     """
@@ -48,32 +51,24 @@ async def ingest_batch_measurements(
     current_user: models.User = Depends(get_current_active_user)
 ):
     """
-    Ingest batch of measurements from mobile app (OFFLINE-FIRST ARCHITECTURE).
+    Ingest a batch of measurements from the mobile app (offline-first architecture).
 
-    This is the PRIMARY endpoint for mobile data ingestion.
-    Mobile app collects measurements offline and sends them as a single batch.
+    Primary endpoint for mobile data ingestion. The app collects measurements
+    offline and sends them as a single batch when connectivity is restored.
+
+    Processing pipeline:
+    1. Validates that the session exists
+    2. Creates a batch record (status=pending) and stores all measurements
+    3. Commits the transaction
+    4. Enqueues an async Celery task for logical validation and map-matching
+
+    The Celery task runs asynchronously — this endpoint returns immediately after
+    the data is committed. If the task queue is unavailable, data is still saved
+    and only a warning is logged.
+
+    Accepts up to 10,000 measurements per request.
 
     Requires: Active user authentication
-
-    This endpoint:
-    1. Validates session existence
-    2. Creates a new batch record with status='pending'
-    3. Stores incoming measurements using bulk insert (db.add_all()) with batch_id FK
-    4. Commits transaction FIRST
-    5. Enqueues Celery task process_batch_task AFTER successful commit
-
-    Performance: Can handle up to 10,000 measurements per request.
-
-    RACE CONDITION FIX:
-    - Celery task is triggered ONLY after db.commit() succeeds
-    - Task will retry automatically if batch is not found (handles Redis faster than Postgres)
-
-    Args:
-        payload: BatchMeasurementCreate containing session_id and list of measurements
-        db: Database session dependency
-
-    Returns:
-        BatchMeasurementResponse with statistics about processed measurements
     """
     start_time = time.time()
     batch_id = None  # Initialize for exception handling

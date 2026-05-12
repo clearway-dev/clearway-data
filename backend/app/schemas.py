@@ -170,7 +170,7 @@ class RawMeasurementCreate(BaseModel):
 class RawMeasurementResponse(BaseModel):
     """Schema for raw measurement response"""
     id: int
-    session_id: UUID
+    batch_id: UUID
     measured_at: datetime
     latitude: float
     longitude: float
