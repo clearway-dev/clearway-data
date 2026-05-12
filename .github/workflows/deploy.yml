@@ -4,10 +4,10 @@ on:
   push:
     branches: ["main"]
     paths:
-      - 'backend/**' # Spusti se pri zmene backendu
-      - 'monitoring/**' # Spusti se pri zmene Prometheus/Grafana konfigurace
-      - 'docker-compose.yml' # Spusti se pri zmene orchestrace sluzeb
-      - '.github/workflows/deploy.yml' # Spusti se pri zmene CD workflow
+      - 'backend/**'
+      - 'monitoring/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy.yml'
 
 env:
   REGISTRY: ghcr.io
