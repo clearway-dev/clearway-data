@@ -83,11 +83,9 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
       let data: LocalMeasurement[];
       
       if (isError) {
-        // Load error records for this session
         const allErrors = await DatabaseService.getErrorRecords(10000);
         data = allErrors.filter(m => m.session_id === sessionId);
       } else {
-        // Load unsent records for this session
         data = await DatabaseService.getUnsyncedMeasurementsBySession(sessionId, 10000);
       }
       
@@ -109,10 +107,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setSyncingSessionId(sessionId);
       
-      // Trigger immediate sync
       await SyncService.forceSync();
-      
-      // Reload the list
       await loadData();
     } catch (error) {
       console.error('Failed to sync session:', error);
@@ -145,13 +140,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setDeletingSessionId(sessionId);
       
-      // Delete unsent records for this session
       const count = await DatabaseService.deleteUnsentRecordsBySession(sessionId);
-      
+
       if (count > 0) {
         console.log(`🗑️ Deleted ${count} unsent records for session ${sessionId}`);
-        
-        // Reload the list
         await loadData();
       }
     } catch (error) {
@@ -166,16 +158,11 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setRetryingSessionId(sessionId);
       
-      // Reset error records for this session back to unsynced state
       const count = await DatabaseService.retryErrorRecordsBySession(sessionId);
-      
+
       if (count > 0) {
         console.log(`✓ Reset ${count} error records for session ${sessionId}`);
-        
-        // Trigger immediate sync for this session
         await SyncService.forceSync();
-        
-        // Reload the list
         await loadData();
       }
     } catch (error) {
@@ -209,13 +196,10 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setDeletingSessionId(sessionId);
       
-      // Delete error records for this session
       const count = await DatabaseService.deleteErrorRecordsBySession(sessionId);
-      
+
       if (count > 0) {
         console.log(`🗑️ Deleted ${count} error records for session ${sessionId}`);
-        
-        // Reload the list
         await loadData();
       }
     } catch (error) {
@@ -472,7 +456,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
             <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
           }
         >
-          {/* Čekající na odeslání (synced = 0) */}
+          {/* Pending upload (synced = 0) */}
           {unsentGroups.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -494,7 +478,7 @@ export const SyncErrorsScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           )}
 
-          {/* Chybná data (synced = -1) */}
+          {/* Failed records (synced = -1) */}
           {errorGroups.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>

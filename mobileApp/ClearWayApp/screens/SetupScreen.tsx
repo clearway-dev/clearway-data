@@ -17,11 +17,9 @@ interface Props {
 }
 
 export const SetupScreen: React.FC<Props> = ({ navigation }) => {
-  // Theme
   const colorScheme = useColorScheme();
   const isDarkMode = colorScheme === 'dark';
 
-  // State
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
@@ -34,18 +32,15 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
   const [sessionVehicleId, setSessionVehicleId] = useState<string | null>(null);
   const [sessionSensorId, setSessionSensorId] = useState<string | null>(null);
   
-  // Check if current selection matches session configuration
   const configurationChanged = sessionId && (
-    selectedVehicleId !== sessionVehicleId || 
+    selectedVehicleId !== sessionVehicleId ||
     selectedSensorId !== sessionSensorId
   );
-  
-  // Check if we're back to original configuration
-  const isOriginalConfiguration = sessionId && 
-    selectedVehicleId === sessionVehicleId && 
+
+  const isOriginalConfiguration = sessionId &&
+    selectedVehicleId === sessionVehicleId &&
     selectedSensorId === sessionSensorId;
 
-  // Load data from API and storage
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -63,23 +58,18 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
         const validVehicleIds = new Set(vehiclesData.map(v => v.id));
         const validSensorIds = new Set(sensorsData.map(s => s.id));
 
-        // If we have a saved session, restore it
         if (savedSession) {
           setSessionId(savedSession.sessionId);
           setSessionVehicleId(savedSession.vehicleId);
           setSessionSensorId(savedSession.sensorId);
-
-          // Pre-select the values from the session
           setSelectedVehicleId(savedSession.vehicleId);
           setSelectedSensorId(savedSession.sensorId);
           console.log('✓ Restored session from storage:', savedSession.sessionId);
         } else if (lastSelection && validVehicleIds.has(lastSelection.vehicleId) && validSensorIds.has(lastSelection.sensorId)) {
-          // Restore last used vehicle/sensor selection (no active session)
           setSelectedVehicleId(lastSelection.vehicleId);
           setSelectedSensorId(lastSelection.sensorId);
           console.log('✓ Restored last selection from storage');
         } else {
-          // Otherwise auto-select first vehicle and sensor if available
           if (vehiclesData.length > 0) {
             setSelectedVehicleId(vehiclesData[0].id);
           }
@@ -99,14 +89,12 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
     initialize();
   }, []);
 
-  // Manual session creation handler
   const handleCreateSession = async () => {
     if (!selectedVehicleId || !selectedSensorId) {
       Alert.alert('Chyba', 'Vyberte vozidlo a senzor');
       return;
     }
 
-    // If we're back to original configuration, ask user
     if (isOriginalConfiguration) {
       Alert.alert(
         'Session již existuje',
@@ -116,7 +104,6 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
           {
             text: 'Použít existující',
             onPress: () => {
-              // Just keep current session, no action needed
               console.log('✓ Using existing session:', sessionId);
             },
           },
@@ -132,7 +119,6 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    // Otherwise create new session
     await createNewSession();
   };
 
@@ -146,7 +132,6 @@ export const SetupScreen: React.FC<Props> = ({ navigation }) => {
       setSessionVehicleId(selectedVehicleId);
       setSessionSensorId(selectedSensorId);
       
-      // Save to storage
       await SessionStorageService.saveSession(session.id, selectedVehicleId, selectedSensorId);
       
       console.log('✓ New session created and saved:', session.id);
