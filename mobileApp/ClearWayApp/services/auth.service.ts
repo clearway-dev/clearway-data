@@ -38,8 +38,8 @@ export class AuthService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        let errorMessage = 'Přihlášení selhalo';
-        
+        let errorMessage = 'Login failed';
+
         try {
           const errorData = await response.json();
           if (errorData.detail) {
@@ -50,9 +50,9 @@ export class AuthService {
         }
 
         if (response.status === 401) {
-          throw new Error('Neplatné přihlašovací údaje');
+          throw new Error('Invalid credentials');
         } else if (response.status === 400) {
-          throw new Error('Chybné přihlašovací údaje');
+          throw new Error('Invalid login credentials');
         }
 
         throw new Error(errorMessage);
@@ -68,11 +68,11 @@ export class AuthService {
     } catch (error) {
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          throw new Error('Časový limit požadavku vypršel');
+          throw new Error('Request timed out');
         }
         throw error;
       }
-      throw new Error('Přihlášení selhalo');
+      throw new Error('Login failed');
     }
   }
 
