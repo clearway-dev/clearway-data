@@ -69,6 +69,8 @@ class VehicleCreate(VehicleBase):
 class VehicleResponse(VehicleBase):
     """Schema for vehicle response"""
     id: UUID
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)  # Allows serialization from SQLAlchemy models
 
@@ -112,6 +114,7 @@ class SessionResponse(BaseModel):
     id: UUID
     sensor_id: UUID
     vehicle_id: UUID
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -154,10 +157,12 @@ class RawMeasurementCreate(BaseModel):
             "example": {
                 "session_id": "550e8400-e29b-41d4-a716-446655440000",
                 "measured_at": "2026-02-24T10:30:00.000Z",
-                "latitude": 49.8175,
-                "longitude": 15.4730,
+                "latitude": 49.7475,
+                "longitude": 13.3776,
                 "distance_left": 250,
-                "distance_right": 380
+                "distance_right": 380,
+                "speed": 8.3,
+                "accuracy_gps": 4.5
             }
         }
     )
@@ -233,17 +238,21 @@ class BatchMeasurementCreate(BaseModel):
                 "measurements": [
                     {
                         "measured_at": "2026-02-24T10:30:00.000Z",
-                        "latitude": 49.8175,
-                        "longitude": 15.4730,
+                        "latitude": 49.7475,
+                        "longitude": 13.3776,
                         "distance_left": 250,
-                        "distance_right": 380
+                        "distance_right": 380,
+                        "speed": 8.3,
+                        "accuracy_gps": 4.5
                     },
                     {
                         "measured_at": "2026-02-24T10:30:01.000Z",
-                        "latitude": 49.8176,
-                        "longitude": 15.4731,
+                        "latitude": 49.7476,
+                        "longitude": 13.3777,
                         "distance_left": 255,
-                        "distance_right": 385
+                        "distance_right": 385,
+                        "speed": 8.4,
+                        "accuracy_gps": 4.3
                     }
                 ]
             }

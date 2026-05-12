@@ -244,19 +244,26 @@ class TestVehicleCreateSchema:
 
 
 class TestVehicleResponseSchema:
-    """VehicleResponse adds a UUID id to VehicleBase."""
+    """VehicleResponse adds a UUID id, created_at and updated_at to VehicleBase."""
 
     def test_valid_with_uuid(self):
-        v = VehicleResponse(id=uuid4(), vehicle_name="Truck", width=200.0)
+        v = VehicleResponse(id=uuid4(), vehicle_name="Truck", width=200.0, created_at=_NOW, updated_at=_NOW)
         assert isinstance(v.id, UUID)
 
     def test_id_from_string_uuid(self):
-        v = VehicleResponse(id=_UUID, vehicle_name="Truck", width=200.0)
+        v = VehicleResponse(id=_UUID, vehicle_name="Truck", width=200.0, created_at=_NOW, updated_at=_NOW)
         assert isinstance(v.id, UUID)
 
     def test_invalid_uuid_raises(self):
         with pytest.raises(ValidationError):
-            VehicleResponse(id="not-a-uuid", vehicle_name="Truck", width=200.0)
+            VehicleResponse(id="not-a-uuid", vehicle_name="Truck", width=200.0, created_at=_NOW, updated_at=_NOW)
+
+    @pytest.mark.parametrize("missing", ["created_at", "updated_at"])
+    def test_missing_datetime_field_raises(self, missing):
+        data = {"id": uuid4(), "vehicle_name": "Truck", "width": 200.0, "created_at": _NOW, "updated_at": _NOW}
+        del data[missing]
+        with pytest.raises(ValidationError):
+            VehicleResponse(**data)
 
 
 # ===========================================================================
@@ -353,16 +360,16 @@ class TestSessionCreateSchema:
 
 
 class TestSessionResponseSchema:
-    """SessionResponse: id, sensor_id, vehicle_id — all required UUIDs."""
+    """SessionResponse: id, sensor_id, vehicle_id, created_at — all required."""
 
     def test_valid(self):
         uid = uuid4()
-        s = SessionResponse(id=uid, sensor_id=uid, vehicle_id=uid)
+        s = SessionResponse(id=uid, sensor_id=uid, vehicle_id=uid, created_at=_NOW)
         assert isinstance(s.id, UUID)
 
-    @pytest.mark.parametrize("missing", ["id", "sensor_id", "vehicle_id"])
+    @pytest.mark.parametrize("missing", ["id", "sensor_id", "vehicle_id", "created_at"])
     def test_missing_required_field(self, missing):
-        data = {"id": uuid4(), "sensor_id": uuid4(), "vehicle_id": uuid4()}
+        data = {"id": uuid4(), "sensor_id": uuid4(), "vehicle_id": uuid4(), "created_at": _NOW}
         del data[missing]
         with pytest.raises(ValidationError):
             SessionResponse(**data)

@@ -14,6 +14,7 @@ so the real OAuth2PasswordBearer raises the expected error.
 Test count: 3-4 per endpoint.
 """
 import pytest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -29,6 +30,7 @@ from app.deps import get_current_active_user
 # ---------------------------------------------------------------------------
 
 _VEHICLE_ID = uuid4()
+_NOW = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
 # SimpleNamespace gives attribute access that Pydantic's from_attributes=True
 # can read (same as a SQLAlchemy model instance, without touching the DB).
@@ -36,6 +38,8 @@ _MOCK_VEHICLE = SimpleNamespace(
     id=_VEHICLE_ID,
     vehicle_name="Test Van",
     width=220.0,
+    created_at=_NOW,
+    updated_at=_NOW,
 )
 
 _DISPATCHER = SimpleNamespace(id=1, email="user@test.com", role="dispatcher", is_active=True)
@@ -63,11 +67,13 @@ def _db_returning_first(obj):
 def _db_for_create(assigned_id=_VEHICLE_ID):
     """
     Mock session for POST endpoint.
-    db.refresh(vehicle_obj) simulates the DB assigning a UUID primary key.
+    db.refresh(vehicle_obj) simulates the DB assigning a UUID primary key and timestamps.
     """
     db = MagicMock()
     def _assign_id(obj):
         obj.id = assigned_id
+        obj.created_at = _NOW
+        obj.updated_at = _NOW
     db.refresh.side_effect = _assign_id
     return db
 

@@ -5,6 +5,7 @@ POST /api/sessions — happy path, sensor not found, vehicle not found,
                      invalid UUIDs, missing auth
 """
 import pytest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -23,6 +24,7 @@ from app import models
 _SENSOR_ID  = uuid4()
 _VEHICLE_ID = uuid4()
 _SESSION_ID = uuid4()
+_NOW = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
 _MOCK_SENSOR  = SimpleNamespace(id=_SENSOR_ID,  description="Sensor A", is_active=True)
 _MOCK_VEHICLE = SimpleNamespace(id=_VEHICLE_ID, vehicle_name="Test Van", width=220.0)
@@ -62,8 +64,11 @@ def _db_for_session(sensor=_MOCK_SENSOR, vehicle=_MOCK_VEHICLE):
 
     db.query.side_effect = _query
 
-    # db.refresh(db_session) simulates DB assigning the session UUID
-    db.refresh.side_effect = lambda obj: setattr(obj, "id", _SESSION_ID)
+    # db.refresh(db_session) simulates DB assigning the session UUID and timestamps
+    def _refresh(obj):
+        obj.id = _SESSION_ID
+        obj.created_at = _NOW
+    db.refresh.side_effect = _refresh
 
     return db
 
