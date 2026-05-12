@@ -13,7 +13,11 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  test:
+    uses: ./.github/workflows/test_backend.yml
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,11 +78,11 @@ jobs:
             # Login to registry
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-            # Pull the latest backend image for both API and Celery Worker
-            docker compose pull api celery_worker
-            
-            # Restart only the API and Celery Worker services
-            docker compose up -d api celery_worker --remove-orphans
+            # Pull the latest backend image for API, Celery Worker and Flower
+            docker compose pull api celery_worker flower
+
+            # Restart backend services
+            docker compose up -d api celery_worker flower --remove-orphans
 
             # Apply monitoring config updates and ensure monitoring stack is running
             docker compose up -d prometheus grafana cadvisor postgres_exporter --remove-orphans

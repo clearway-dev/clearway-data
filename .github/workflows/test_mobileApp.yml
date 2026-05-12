@@ -18,6 +18,9 @@ on:
       - 'mobileApp/**'
       - '.github/workflows/test_mobileApp.yml'
 
+  # Umožní volání z build_mobileApp.yml přes needs/uses
+  workflow_call:
+
 jobs:
   test:
     runs-on: ubuntu-latest

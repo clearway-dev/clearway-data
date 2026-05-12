@@ -19,6 +19,9 @@ on:
       - 'backend/**'
       - '.github/workflows/test_backend.yml'
 
+  # Umozni volani z deploy.yml pres needs/uses
+  workflow_call:
+
 jobs:
   test:
     runs-on: ubuntu-latest
