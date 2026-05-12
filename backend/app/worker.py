@@ -63,31 +63,28 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    # Serializace
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
 
-    # Spolehlivost — globální výchozí hodnoty (přepisují se dekorátorem na tasku)
+    # acks_late + reject_on_worker_lost ensure at-least-once delivery for long batch jobs.
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     task_track_started=True,
 
-    # Prefetch: worker si bere jen 1 task najednou — klíčové pro dlouhé batch úlohy
+    # Prefetch 1: worker takes only one task at a time — critical for long-running batches.
     worker_prefetch_multiplier=1,
 
-    # Time limity: soft → graceful SIGTERM, hard → SIGKILL
+    # soft → graceful SIGTERM, hard → SIGKILL
     task_soft_time_limit=270,
     task_time_limit=300,
 
-    # Výsledky: ukládáme (potřebujeme status), ale po 1h z Redis zmizí
     task_ignore_result=False,
-    result_expires=3600,
+    result_expires=3600,  # Results expire from Redis after 1 hour.
 
-    # Redis broker: visibility_timeout musí být >= task_time_limit
-    # Pokud worker nestihne task za 600s, Redis ho vrátí do fronty (re-queue)
+    # visibility_timeout must be >= task_time_limit to prevent Redis re-queuing an in-progress task.
     broker_transport_options={
         "visibility_timeout": 600,
         "retry_policy": {"timeout": 5.0},
@@ -211,9 +208,9 @@ def _map_match(
                 degrees(ST_Azimuth(ST_StartPoint(rs.geom), ST_EndPoint(rs.geom))) AS road_heading,
                 ST_Distance(rs.geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) AS distance
             FROM road_segments rs
-            -- Nejprve pomocí rychlého indexu ořízneme hledání na malý čtvereček (cca odpovídá tvému max_dist)
-            WHERE rs.geom && ST_Expand(ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :max_dist / 111320.0) 
-            -- Následně seřadíme podle skutečné geometrické vzdálenosti pomocí bleskového operátoru <->
+            -- Bounding box pre-filter using the spatial index (approx. max_dist in degrees).
+            WHERE rs.geom && ST_Expand(ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :max_dist / 111320.0)
+            -- Refine with exact geometric distance using the <-> KNN operator.
             ORDER BY rs.geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
             LIMIT 3;
             """

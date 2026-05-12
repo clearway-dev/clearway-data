@@ -99,10 +99,7 @@ async def ingest_batch_measurements(
         batch_id = new_batch.id
         logger.debug(f"Created batch {batch_id} for session {payload.session_id}")
 
-        # ✅ PROMETHEUS: Increment batch counter (status=pending)
         batches_received_total.labels(status="pending").inc()
-
-        # ✅ PROMETHEUS: Record batch size distribution
         batch_size_measurements.observe(total_received)
 
         # 3. Prepare measurements with batch_id FK
@@ -125,7 +122,7 @@ async def ingest_batch_measurements(
 
             measurements_to_insert.append(new_measurement)
 
-        # 4. Perform BULK INSERT (efficient!)
+        # 4. Bulk insert all measurements
         if measurements_to_insert:
             try:
                 db.add_all(measurements_to_insert)
@@ -161,10 +158,8 @@ async def ingest_batch_measurements(
                     detail=f"Database constraint violation - check that session_id exists: {str(ie)}"
                 )
 
-        # Calculate latency
         latency_ms = int((time.time() - start_time) * 1000)
 
-        # Single comprehensive summary log
         logger.info(
             f"Batch {batch_id} processed: {total_received} received, {total_stored} valid, "
             f"queued for Celery in {latency_ms}ms"

@@ -26,8 +26,8 @@ export interface LocalMeasurement {
   longitude: number;
   distance_left: number;
   distance_right: number;
-  speed: number | null; // Může být null pokud GPS neposkytuje rychlost
-  accuracy_gps: number | null; // Může být null pokud GPS neposkytuje přesnost
+  speed: number | null; // null when GPS does not report speed
+  accuracy_gps: number | null; // null when GPS does not report accuracy
   synced: number; // 0 = pending, 1 = synced successfully, -1 = error (poison pill)
   error_message: string | null; // Error message if synced = -1
   error_at: string | null; // ISO timestamp when error occurred
@@ -39,8 +39,8 @@ export interface MeasurementItem {
   longitude: number;
   distance_left: number;
   distance_right: number;
-  speed: number | null; // Může být null pokud GPS neposkytuje rychlost
-  accuracy_gps: number | null; // Může být null pokud GPS neposkytuje přesnost
+  speed: number | null; // null when GPS does not report speed
+  accuracy_gps: number | null; // null when GPS does not report accuracy
 }
 
 export interface MeasurementBatch {

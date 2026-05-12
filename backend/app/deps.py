@@ -11,8 +11,8 @@ from app.schemas import TokenData
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/access-token")
 
-# Cache: email → (User, timestamp). TTL 300 s — po 5 minutách se znovu ověří v DB.
-# Deaktivace uživatele se projeví nejpozději po uplynutí TTL.
+# Cache: email → (User, timestamp). Re-verified against the DB on cache miss.
+# User deactivation takes effect with up to TTL-second delay.
 _user_cache: dict[str, tuple[User, float]] = {}
 _USER_CACHE_TTL = 300
 
