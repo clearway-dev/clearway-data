@@ -8,22 +8,20 @@ export const MeasurementConfig = {
   /**
    * Normal distance range for left sensor (in cm)
    */
-  NORMAL_DISTANCE_MIN: 290,
-  NORMAL_DISTANCE_MAX: 310,
+  NORMAL_DISTANCE_MIN: 85,
+  NORMAL_DISTANCE_MAX: 150,
 
   /**
    * Obstacle distance range (in cm) - representing parked car
    */
-  OBSTACLE_DISTANCE_MIN: 190,
-  OBSTACLE_DISTANCE_MAX: 230,
+  OBSTACLE_DISTANCE_MIN: 40,
+  OBSTACLE_DISTANCE_MAX: 75,
 
   /**
-   * Outlier (noise) distance ranges (in cm)
+   * Outlier (noise) distance range (in cm) — same range as obstacle to stress-test the median filter
    */
-  OUTLIER_LOW_MIN: 45,
-  OUTLIER_LOW_MAX: 95,
-  OUTLIER_HIGH_MIN: 550,
-  OUTLIER_HIGH_MAX: 600,
+  OUTLIER_LOW_MIN: 40,
+  OUTLIER_LOW_MAX: 75,
 
   /**
    * Probability of Type A anomaly (single outlier/sensor noise)
