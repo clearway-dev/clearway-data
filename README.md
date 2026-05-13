@@ -19,6 +19,7 @@ clearway-data/
 ├── logs/                       # Runtime logs (gitignored)
 ├── docker-compose.yml          # Full stack orchestration
 ├── docker-compose.prod.yml     # Production orchestration (Traefik + GHCR images)
+├── dataset.csv                 # Dataset of real measurements from FEL
 └── .env.example                # Environment variable template
 ```
 
@@ -34,7 +35,7 @@ Mobile App (Expo / React Native)
   FastAPI Backend  ──── Redis ────  Celery Worker
         │                                │
         │                         Phase 1: Logical and Geographical validation
-        │                         Phase 2: Map-matching (PostGIS)
+        │ raw_ measurements       Phase 2: Map-matching (PostGIS)
         │                         Phase 3: Median-filter cleaning
         ▼                                ▼
   PostgreSQL + PostGIS  ◄────────  cleaned_measurements
