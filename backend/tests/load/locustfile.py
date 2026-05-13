@@ -107,7 +107,7 @@ class MeasurementUser(HttpUser):
       - Repeatedly sends batches of 200–300 GPS points
     """
 
-    wait_time = between(20, 30)
+    wait_time = between(50, 60)
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -203,14 +203,14 @@ class MeasurementUser(HttpUser):
     @task
     def send_batch(self) -> None:
         """
-        Send a batch of 200–300 real Plzeň GPS measurements.
+        Send a batch of 500–600 real Plzeň GPS measurements.
         The API should respond with HTTP 201 almost immediately;
         the Celery worker picks up the heavy map-matching asynchronously.
         """
         if not self._session_id:
             return
 
-        batch_size = random.randint(200, 300)
+        batch_size = random.randint(500, 600)
         payload = _build_batch(self._session_id, batch_size)
 
         with self.client.post(
