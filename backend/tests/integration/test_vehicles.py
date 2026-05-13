@@ -1,5 +1,5 @@
 """
-Isolated API tests for /api/vehicles (routers/vehicles.py).
+Isolated API tests for /api/v1/vehicles (routers/vehicles.py).
 
 Architecture
 ────────────
@@ -96,7 +96,7 @@ client = TestClient(app, raise_server_exceptions=False)
 
 
 # ===========================================================================
-# GET /api/vehicles
+# GET /api/v1/vehicles
 # ===========================================================================
 
 class TestGetVehicles:
@@ -105,7 +105,7 @@ class TestGetVehicles:
         app.dependency_overrides[get_db] = lambda: _db_returning_list([_MOCK_VEHICLE])
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get("/api/vehicles")
+        response = client.get("/api/v1/vehicles")
 
         assert response.status_code == 200
         data = response.json()
@@ -118,7 +118,7 @@ class TestGetVehicles:
         app.dependency_overrides[get_db] = lambda: _db_returning_list([])
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get("/api/vehicles")
+        response = client.get("/api/v1/vehicles")
 
         assert response.status_code == 200
         assert response.json() == []
@@ -127,13 +127,13 @@ class TestGetVehicles:
         # No auth override → real OAuth2PasswordBearer runs → no token → 401
         app.dependency_overrides[get_db] = lambda: _db_returning_list([])
 
-        response = client.get("/api/vehicles")
+        response = client.get("/api/v1/vehicles")
 
         assert response.status_code == 401
 
 
 # ===========================================================================
-# POST /api/vehicles
+# POST /api/v1/vehicles
 # ===========================================================================
 
 class TestCreateVehicle:
@@ -145,7 +145,7 @@ class TestCreateVehicle:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.post(
-            "/api/vehicles",
+            "/api/v1/vehicles",
             json={"vehicle_name": "Fire Truck", "width": 250.0},
         )
 
@@ -161,7 +161,7 @@ class TestCreateVehicle:
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
         response = client.post(
-            "/api/vehicles",
+            "/api/v1/vehicles",
             json={"vehicle_name": "Stealth Van", "width": 180.0},
         )
 
@@ -173,7 +173,7 @@ class TestCreateVehicle:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.post(
-            "/api/vehicles",
+            "/api/v1/vehicles",
             json={"vehicle_name": "Zero Width", "width": 0},
         )
 
@@ -185,7 +185,7 @@ class TestCreateVehicle:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.post(
-            "/api/vehicles",
+            "/api/v1/vehicles",
             json={"vehicle_name": "", "width": 100.0},
         )
 
@@ -193,7 +193,7 @@ class TestCreateVehicle:
 
 
 # ===========================================================================
-# GET /api/vehicles/{vehicle_id}
+# GET /api/v1/vehicles/{vehicle_id}
 # ===========================================================================
 
 class TestGetVehicleById:
@@ -202,7 +202,7 @@ class TestGetVehicleById:
         app.dependency_overrides[get_db] = lambda: _db_returning_first(_MOCK_VEHICLE)
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get(f"/api/vehicles/{_VEHICLE_ID}")
+        response = client.get(f"/api/v1/vehicles/{_VEHICLE_ID}")
 
         assert response.status_code == 200
         body = response.json()
@@ -214,13 +214,13 @@ class TestGetVehicleById:
         app.dependency_overrides[get_db] = lambda: _db_returning_first(None)
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get(f"/api/vehicles/{uuid4()}")
+        response = client.get(f"/api/v1/vehicles/{uuid4()}")
 
         assert response.status_code == 404
 
     def test_401_missing_token(self):
         app.dependency_overrides[get_db] = lambda: _db_returning_first(_MOCK_VEHICLE)
 
-        response = client.get(f"/api/vehicles/{_VEHICLE_ID}")
+        response = client.get(f"/api/v1/vehicles/{_VEHICLE_ID}")
 
         assert response.status_code == 401

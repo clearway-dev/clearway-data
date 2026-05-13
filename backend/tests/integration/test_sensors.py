@@ -1,8 +1,8 @@
 """
-Isolated API tests for /api/sensors (routers/sensors.py).
+Isolated API tests for /api/v1/sensors (routers/sensors.py).
 
-GET  /api/sensors  — returns only active sensors, auth required
-POST /api/sensors  — admin creates, dispatcher rejected, invalid payload
+GET  /api/v1/sensors  — returns only active sensors, auth required
+POST /api/v1/sensors  — admin creates, dispatcher rejected, invalid payload
 """
 import pytest
 from datetime import datetime, timezone
@@ -44,7 +44,7 @@ def _reset_overrides():
 
 
 # ===========================================================================
-# GET /api/sensors
+# GET /api/v1/sensors
 # ===========================================================================
 
 class TestGetSensors:
@@ -56,7 +56,7 @@ class TestGetSensors:
         app.dependency_overrides[get_db] = lambda: db
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get("/api/sensors")
+        response = client.get("/api/v1/sensors")
 
         assert response.status_code == 200
         data = response.json()
@@ -71,7 +71,7 @@ class TestGetSensors:
         app.dependency_overrides[get_db] = lambda: db
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get("/api/sensors")
+        response = client.get("/api/v1/sensors")
 
         assert response.status_code == 200
         assert response.json() == []
@@ -79,13 +79,13 @@ class TestGetSensors:
     def test_401_missing_token(self):
         app.dependency_overrides[get_db] = lambda: MagicMock()
 
-        response = client.get("/api/sensors")
+        response = client.get("/api/v1/sensors")
 
         assert response.status_code == 401
 
 
 # ===========================================================================
-# POST /api/sensors
+# POST /api/v1/sensors
 # ===========================================================================
 
 class TestCreateSensor:
@@ -101,7 +101,7 @@ class TestCreateSensor:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.post(
-            "/api/sensors",
+            "/api/v1/sensors",
             json={"description": "New Sensor", "is_active": True},
         )
 
@@ -122,7 +122,7 @@ class TestCreateSensor:
         app.dependency_overrides[get_db] = lambda: db
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
-        response = client.post("/api/sensors", json={})
+        response = client.post("/api/v1/sensors", json={})
 
         assert response.status_code == 201
 
@@ -130,7 +130,7 @@ class TestCreateSensor:
         app.dependency_overrides[get_db] = lambda: MagicMock()
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.post("/api/sensors", json={"description": "X"})
+        response = client.post("/api/v1/sensors", json={"description": "X"})
 
         assert response.status_code == 403
 
@@ -138,6 +138,6 @@ class TestCreateSensor:
         app.dependency_overrides[get_db] = lambda: MagicMock()
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
-        response = client.post("/api/sensors", json={"is_active": "yes-please"})
+        response = client.post("/api/v1/sensors", json={"is_active": "yes-please"})
 
         assert response.status_code == 422

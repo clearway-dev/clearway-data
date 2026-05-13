@@ -1,7 +1,7 @@
 """
 ClearWay Load Test — batch GPS ingestion, shared-token variant.
 
-Target:  POST /api/measurements/raw-data/batch
+Target:  POST /api/v1/measurements/raw-data/batch
 Goal:    Same as locustfile.py but login happens exactly ONCE for the entire
          test run.  All 500 virtual users reuse the same JWT token, so the
          server performs bcrypt only once instead of 500 times.
@@ -122,27 +122,27 @@ class MeasurementUser(HttpUser):
 
             # Single login for the entire test run
             r = self.client.post(
-                "/api/auth/login/access-token",
+                "/api/v1/auth/login/access-token",
                 data={"username": _ADMIN_USER, "password": _ADMIN_PASS},
-                name="[setup] POST /api/auth/login/access-token",
+                name="[setup] POST /api/v1/auth/login/access-token",
             )
             r.raise_for_status()
             _shared["token"] = r.json()["access_token"]
 
             r = self.client.post(
-                "/api/vehicles",
+                "/api/v1/vehicles",
                 json={"vehicle_name": "locust-load-test", "width": 180.0},
                 headers=self._auth_headers(),
-                name="[setup] POST /api/vehicles",
+                name="[setup] POST /api/v1/vehicles",
             )
             r.raise_for_status()
             _shared["vehicle_id"] = r.json()["id"]
 
             r = self.client.post(
-                "/api/sensors",
+                "/api/v1/sensors",
                 json={"description": "locust-load-test-sensor", "is_active": True},
                 headers=self._auth_headers(),
-                name="[setup] POST /api/sensors",
+                name="[setup] POST /api/v1/sensors",
             )
             r.raise_for_status()
             _shared["sensor_id"] = r.json()["id"]
@@ -153,13 +153,13 @@ class MeasurementUser(HttpUser):
 
     def _create_session(self) -> None:
         r = self.client.post(
-            "/api/sessions",
+            "/api/v1/sessions",
             json={
                 "vehicle_id": _shared["vehicle_id"],
                 "sensor_id": _shared["sensor_id"],
             },
             headers=self._auth_headers(),
-            name="[setup] POST /api/sessions",
+            name="[setup] POST /api/v1/sessions",
         )
         r.raise_for_status()
         self._session_id = r.json()["id"]
@@ -175,11 +175,11 @@ class MeasurementUser(HttpUser):
         payload = _build_batch(self._session_id, batch_size)
 
         with self.client.post(
-            "/api/measurements/raw-data/batch",
+            "/api/v1/measurements/raw-data/batch",
             json=payload,
             headers=self._auth_headers(),
             catch_response=True,
-            name="POST /api/measurements/raw-data/batch",
+            name="POST /api/v1/measurements/raw-data/batch",
         ) as resp:
             if resp.status_code == 201:
                 resp.success()

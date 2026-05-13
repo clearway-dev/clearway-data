@@ -2,7 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { User, LoginRequest, AuthResponse } from '../types';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
-const API_PREFIX = '/api';
+const API_PREFIX = '/api/v1';
 const TOKEN_KEY = 'auth_token';
 const TOKEN_EXPIRED_ERROR = 'Token expired';
 

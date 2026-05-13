@@ -1,7 +1,7 @@
 """
-Isolated API tests for /api/sessions (routers/sessions.py).
+Isolated API tests for /api/v1/sessions (routers/sessions.py).
 
-POST /api/sessions — happy path, sensor not found, vehicle not found,
+POST /api/v1/sessions — happy path, sensor not found, vehicle not found,
                      invalid UUIDs, missing auth
 """
 import pytest
@@ -74,7 +74,7 @@ def _db_for_session(sensor=_MOCK_SENSOR, vehicle=_MOCK_VEHICLE):
 
 
 # ===========================================================================
-# POST /api/sessions
+# POST /api/v1/sessions
 # ===========================================================================
 
 class TestCreateSession:
@@ -84,7 +84,7 @@ class TestCreateSession:
         app.dependency_overrides[get_current_active_user] = lambda: _USER
 
         response = client.post(
-            "/api/sessions",
+            "/api/v1/sessions",
             json={"sensor_id": str(_SENSOR_ID), "vehicle_id": str(_VEHICLE_ID)},
         )
 
@@ -100,7 +100,7 @@ class TestCreateSession:
         app.dependency_overrides[get_current_active_user] = lambda: _USER
 
         response = client.post(
-            "/api/sessions",
+            "/api/v1/sessions",
             json={"sensor_id": str(uuid4()), "vehicle_id": str(_VEHICLE_ID)},
         )
 
@@ -113,7 +113,7 @@ class TestCreateSession:
         app.dependency_overrides[get_current_active_user] = lambda: _USER
 
         response = client.post(
-            "/api/sessions",
+            "/api/v1/sessions",
             json={"sensor_id": str(_SENSOR_ID), "vehicle_id": str(uuid4())},
         )
 
@@ -125,7 +125,7 @@ class TestCreateSession:
         app.dependency_overrides[get_current_active_user] = lambda: _USER
 
         response = client.post(
-            "/api/sessions",
+            "/api/v1/sessions",
             json={"sensor_id": "not-a-uuid", "vehicle_id": "also-not"},
         )
 
@@ -135,7 +135,7 @@ class TestCreateSession:
         app.dependency_overrides[get_db] = lambda: MagicMock()
 
         response = client.post(
-            "/api/sessions",
+            "/api/v1/sessions",
             json={"sensor_id": str(_SENSOR_ID), "vehicle_id": str(_VEHICLE_ID)},
         )
 

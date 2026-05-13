@@ -150,7 +150,7 @@ async def log_requests(request, call_next):
 # ROUTER REGISTRATION
 # ==============================================
 
-app.include_router(auth.router,         prefix="/api/auth",   tags=["auth"])
+app.include_router(auth.router,         prefix="/api/v1/auth",   tags=["auth"])
 app.include_router(health.router)
 app.include_router(vehicles.router)
 app.include_router(sensors.router)

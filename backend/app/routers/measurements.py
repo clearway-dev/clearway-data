@@ -12,7 +12,7 @@ from app.deps import get_current_active_user
 from app.worker import process_batch_task
 from app.metrics import batches_received_total, batch_size_measurements
 
-router = APIRouter(prefix="/api/measurements", tags=["measurements"])
+router = APIRouter(prefix="/api/v1/measurements", tags=["measurements"])
 
 
 @router.get("/recent", response_model=List[schemas.RawMeasurementResponse])
