@@ -68,19 +68,19 @@ describe('AuthService.login()', () => {
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('auth_token', 'tok123');
   });
 
-  it('throws "Neplatné přihlašovací údaje" on 401', async () => {
+  it('throws "Invalid credentials" on 401', async () => {
     mockFetch(401, { detail: 'Unauthorized' }, false);
 
     await expect(AuthService.login('a@b.com', 'wrong')).rejects.toThrow(
-      'Neplatné přihlašovací údaje'
+      'Invalid credentials'
     );
   });
 
-  it('throws "Chybné přihlašovací údaje" on 400', async () => {
+  it('throws "Invalid login credentials" on 400', async () => {
     mockFetch(400, { detail: 'Bad credentials' }, false);
 
     await expect(AuthService.login('a@b.com', 'wrong')).rejects.toThrow(
-      'Chybné přihlašovací údaje'
+      'Invalid login credentials'
     );
   });
 
@@ -90,7 +90,7 @@ describe('AuthService.login()', () => {
     global.fetch = jest.fn().mockRejectedValueOnce(abortError);
 
     await expect(AuthService.login('a@b.com', 'pass')).rejects.toThrow(
-      'Časový limit požadavku vypršel'
+      'Request timed out'
     );
   });
 });

@@ -12,7 +12,7 @@ from app.deps import get_current_active_user
 from app.worker import process_batch_task
 from app.metrics import batches_received_total, batch_size_measurements
 
-router = APIRouter(prefix="/api/measurements", tags=["measurements"])
+router = APIRouter(prefix="/api/v1/measurements", tags=["measurements"])
 
 
 @router.get("/recent", response_model=List[schemas.RawMeasurementResponse])
@@ -23,7 +23,10 @@ async def get_recent_measurements(
 ):
     """
     Get recent measurements for debugging/monitoring.
-    Returns the most recent measurements ordered by timestamp.
+    Returns the most recent measurements ordered by timestamp (newest first).
+
+    Query params:
+        limit: maximum number of records to return (default 100)
 
     Requires: Active user authentication
     """
@@ -48,32 +51,24 @@ async def ingest_batch_measurements(
     current_user: models.User = Depends(get_current_active_user)
 ):
     """
-    Ingest batch of measurements from mobile app (OFFLINE-FIRST ARCHITECTURE).
+    Ingest a batch of measurements from the mobile app (offline-first architecture).
 
-    This is the PRIMARY endpoint for mobile data ingestion.
-    Mobile app collects measurements offline and sends them as a single batch.
+    Primary endpoint for mobile data ingestion. The app collects measurements
+    offline and sends them as a single batch when connectivity is restored.
+
+    Processing pipeline:
+    1. Validates that the session exists
+    2. Creates a batch record (status=pending) and stores all measurements
+    3. Commits the transaction
+    4. Enqueues an async Celery task for logical validation and map-matching
+
+    The Celery task runs asynchronously — this endpoint returns immediately after
+    the data is committed. If the task queue is unavailable, data is still saved
+    and only a warning is logged.
+
+    Accepts up to 10,000 measurements per request.
 
     Requires: Active user authentication
-
-    This endpoint:
-    1. Validates session existence
-    2. Creates a new batch record with status='pending'
-    3. Stores incoming measurements using bulk insert (db.add_all()) with batch_id FK
-    4. Commits transaction FIRST
-    5. Enqueues Celery task process_batch_task AFTER successful commit
-
-    Performance: Can handle up to 10,000 measurements per request.
-
-    RACE CONDITION FIX:
-    - Celery task is triggered ONLY after db.commit() succeeds
-    - Task will retry automatically if batch is not found (handles Redis faster than Postgres)
-
-    Args:
-        payload: BatchMeasurementCreate containing session_id and list of measurements
-        db: Database session dependency
-
-    Returns:
-        BatchMeasurementResponse with statistics about processed measurements
     """
     start_time = time.time()
     batch_id = None  # Initialize for exception handling
@@ -104,10 +99,7 @@ async def ingest_batch_measurements(
         batch_id = new_batch.id
         logger.debug(f"Created batch {batch_id} for session {payload.session_id}")
 
-        # ✅ PROMETHEUS: Increment batch counter (status=pending)
         batches_received_total.labels(status="pending").inc()
-
-        # ✅ PROMETHEUS: Record batch size distribution
         batch_size_measurements.observe(total_received)
 
         # 3. Prepare measurements with batch_id FK
@@ -130,7 +122,7 @@ async def ingest_batch_measurements(
 
             measurements_to_insert.append(new_measurement)
 
-        # 4. Perform BULK INSERT (efficient!)
+        # 4. Bulk insert all measurements
         if measurements_to_insert:
             try:
                 db.add_all(measurements_to_insert)
@@ -166,10 +158,8 @@ async def ingest_batch_measurements(
                     detail=f"Database constraint violation - check that session_id exists: {str(ie)}"
                 )
 
-        # Calculate latency
         latency_ms = int((time.time() - start_time) * 1000)
 
-        # Single comprehensive summary log
         logger.info(
             f"Batch {batch_id} processed: {total_received} received, {total_stored} valid, "
             f"queued for Celery in {latency_ms}ms"

@@ -20,7 +20,6 @@ services:
     # Load env variables specifically for this service (optional but good practice)
     env_file:
       - .env
-    # Parametr --reload zajistí, že Uvicorn sám restartuje server při změně kódu
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - clearway-network

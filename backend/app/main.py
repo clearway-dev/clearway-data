@@ -56,28 +56,26 @@ app = FastAPI(
 # PROMETHEUS INSTRUMENTATION
 # ==============================================
 
-# Automatická instrumentace FastAPI s Prometheus metrikami
-# Vytvoří endpoint /metrics pro scraping Prometheus serverem
 Instrumentator().instrument(app).expose(app)
 
-logger.info("Prometheus instrumentace aktivována - endpoint dostupný na /metrics")
+logger.info("Prometheus instrumentation active — /metrics endpoint exposed")
 
 
 # ==============================================
 # MIDDLEWARE CONFIGURATION
 # ==============================================
 
-# CORS Middleware - Povolení všech originů pro vývoj/PoC
+# allow_origins=["*"] is intentional for development/PoC; restrict to specific domains in production.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Pro vývoj - v produkci použít konkrétní domény
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # GET, POST, PUT, DELETE, PATCH, OPTIONS
-    allow_headers=["*"],  # Všechny hlavičky
-    max_age=3600,  # Preflight cache - 1 hodina
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=3600,
 )
 
-logger.info("CORS Middleware aktivován - allow_origins=['*'] (development mode)")
+logger.info("CORS middleware active — allow_origins=['*'] (development mode)")
 
 
 # Request Logging Middleware - Production-grade logging with path filtering
@@ -152,7 +150,7 @@ async def log_requests(request, call_next):
 # ROUTER REGISTRATION
 # ==============================================
 
-app.include_router(auth.router,         prefix="/api/auth",   tags=["auth"])
+app.include_router(auth.router,         prefix="/api/v1/auth",   tags=["auth"])
 app.include_router(health.router)
 app.include_router(vehicles.router)
 app.include_router(sensors.router)

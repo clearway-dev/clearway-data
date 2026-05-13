@@ -231,7 +231,7 @@ describe('MeasurementScreen — pause/resume controls', () => {
     setupSyncHook();
     const { getByText, queryByText } = renderScreen();
 
-    // Button shows either Stop or Pokračovat depending on state
+    // Button shows either "Stop" or "Pokračovat" (Continue) depending on pause state
     const hasStop = queryByText('Stop');
     const hasContinue = queryByText('Pokračovat');
 

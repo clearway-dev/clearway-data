@@ -34,12 +34,12 @@ async def check_database_connection(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
         return {
             "status": "success",
-            "message": "Připojení k databázi funguje!",
+            "message": "Database connection is healthy.",
             "database": "PostgreSQL"
         }
     except Exception as e:
         logger.error(f"Database connection failed: {str(e)}")
         return {
             "status": "error",
-            "message": f"Chyba připojení: {str(e)}"
+            "message": f"Database connection failed: {str(e)}"
         }

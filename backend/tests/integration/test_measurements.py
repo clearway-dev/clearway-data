@@ -1,8 +1,8 @@
 """
-Isolated API tests for /api/measurements (routers/measurements.py).
+Isolated API tests for /api/v1/measurements (routers/measurements.py).
 
-GET  /api/measurements/recent        — happy path, auth required
-POST /api/measurements/raw-data/batch — happy path (Celery mocked),
+GET  /api/v1/measurements/recent        — happy path, auth required
+POST /api/v1/measurements/raw-data/batch — happy path (Celery mocked),
                                          session not found, invalid payload,
                                          Celery failure does not fail request
 """
@@ -31,10 +31,10 @@ _MOCK_SESSION = SimpleNamespace(id=_SESSION_ID)
 
 _MOCK_MEASUREMENT = SimpleNamespace(
     id=1,
-    session_id=_SESSION_ID,
+    batch_id=_BATCH_ID,
     measured_at=_NOW,
     latitude=49.8175,
-    longitude=15.4730,
+    longitude=13.3776,
     distance_left=250.0,
     distance_right=380.0,
     speed=13.5,
@@ -107,7 +107,7 @@ def _db_for_batch(session_exists=True):
 
 
 # ===========================================================================
-# GET /api/measurements/recent
+# GET /api/v1/measurements/recent
 # ===========================================================================
 
 class TestGetRecentMeasurements:
@@ -121,7 +121,7 @@ class TestGetRecentMeasurements:
         app.dependency_overrides[get_db] = lambda: db
         app.dependency_overrides[get_current_active_user] = lambda: _USER
 
-        response = client.get("/api/measurements/recent")
+        response = client.get("/api/v1/measurements/recent")
 
         assert response.status_code == 200
         data = response.json()
@@ -134,7 +134,7 @@ class TestGetRecentMeasurements:
         app.dependency_overrides[get_db] = lambda: db
         app.dependency_overrides[get_current_active_user] = lambda: _USER
 
-        response = client.get("/api/measurements/recent")
+        response = client.get("/api/v1/measurements/recent")
 
         assert response.status_code == 200
         assert response.json() == []
@@ -142,13 +142,13 @@ class TestGetRecentMeasurements:
     def test_401_missing_token(self):
         app.dependency_overrides[get_db] = lambda: MagicMock()
 
-        response = client.get("/api/measurements/recent")
+        response = client.get("/api/v1/measurements/recent")
 
         assert response.status_code == 401
 
 
 # ===========================================================================
-# POST /api/measurements/raw-data/batch
+# POST /api/v1/measurements/raw-data/batch
 # ===========================================================================
 
 class TestBatchIngest:
@@ -158,7 +158,7 @@ class TestBatchIngest:
         app.dependency_overrides[get_current_active_user] = lambda: _USER
 
         with patch("app.routers.measurements.process_batch_task") as mock_task:
-            response = client.post("/api/measurements/raw-data/batch", json=_batch_payload())
+            response = client.post("/api/v1/measurements/raw-data/batch", json=_batch_payload())
 
         assert response.status_code == 201
         body = response.json()
@@ -175,7 +175,7 @@ class TestBatchIngest:
 
         with patch("app.routers.measurements.process_batch_task"):
             response = client.post(
-                "/api/measurements/raw-data/batch",
+                "/api/v1/measurements/raw-data/batch",
                 json=_batch_payload(session_id=uuid4()),
             )
 
@@ -187,7 +187,7 @@ class TestBatchIngest:
 
         with patch("app.routers.measurements.process_batch_task"):
             response = client.post(
-                "/api/measurements/raw-data/batch",
+                "/api/v1/measurements/raw-data/batch",
                 json={"session_id": str(_SESSION_ID), "measurements": []},
             )
 
@@ -198,7 +198,7 @@ class TestBatchIngest:
 
         with patch("app.routers.measurements.process_batch_task"):
             response = client.post(
-                "/api/measurements/raw-data/batch",
+                "/api/v1/measurements/raw-data/batch",
                 json=_batch_payload(),
             )
 
@@ -214,7 +214,7 @@ class TestBatchIngest:
 
         with patch("app.routers.measurements.process_batch_task") as mock_task:
             mock_task.delay.side_effect = Exception("Redis unavailable")
-            response = client.post("/api/measurements/raw-data/batch", json=_batch_payload())
+            response = client.post("/api/v1/measurements/raw-data/batch", json=_batch_payload())
 
         assert response.status_code == 201
         assert response.json()["total_stored"] == 1

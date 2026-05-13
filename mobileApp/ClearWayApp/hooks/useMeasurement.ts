@@ -25,14 +25,8 @@ const simulateDistances = (): { distance_left: number; distance_right: number } 
 
   // Type A: Configurable chance of single outlier (sensor noise)
   if (rand < MeasurementConfig.ANOMALY_TYPE_A_PROBABILITY) {
-    const isExtremeLow = Math.random() < 0.5;
-    const outlierLeft = isExtremeLow 
-      ? MeasurementConfig.OUTLIER_LOW_MIN + Math.random() * (MeasurementConfig.OUTLIER_LOW_MAX - MeasurementConfig.OUTLIER_LOW_MIN)
-      : MeasurementConfig.OUTLIER_HIGH_MIN + Math.random() * (MeasurementConfig.OUTLIER_HIGH_MAX - MeasurementConfig.OUTLIER_HIGH_MIN);
-    const outlierRight = isExtremeLow 
-      ? MeasurementConfig.OUTLIER_LOW_MIN + Math.random() * (MeasurementConfig.OUTLIER_LOW_MAX - MeasurementConfig.OUTLIER_LOW_MIN)
-      : MeasurementConfig.OUTLIER_HIGH_MIN + Math.random() * (MeasurementConfig.OUTLIER_HIGH_MAX - MeasurementConfig.OUTLIER_HIGH_MIN);
-    
+    const outlierLeft = MeasurementConfig.OUTLIER_LOW_MIN + Math.random() * (MeasurementConfig.OUTLIER_LOW_MAX - MeasurementConfig.OUTLIER_LOW_MIN);
+    const outlierRight = MeasurementConfig.OUTLIER_LOW_MIN + Math.random() * (MeasurementConfig.OUTLIER_LOW_MAX - MeasurementConfig.OUTLIER_LOW_MIN);
     console.log('🔴 TYPE A ANOMALY: Single outlier', { left: outlierLeft, right: outlierRight });
     return {
       distance_left: outlierLeft,
@@ -123,7 +117,7 @@ export const useMeasurement = (sessionId: string | null) => {
 
           const { distance_left, distance_right } = distances;
           
-          // Posílat pouze reálné hodnoty z GPS (může být null/undefined)
+          // Pass null when GPS doesn't report speed/accuracy rather than simulating values.
           const speed = location.speed != null && location.speed >= 0 ? location.speed : null;
           const accuracy_gps = location.accuracy ?? null;
 

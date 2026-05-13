@@ -8,7 +8,7 @@ from app import models, schemas
 from app.database import get_db
 from app.deps import get_current_active_user, require_admin
 
-router = APIRouter(prefix="/api/vehicles", tags=["vehicles"])
+router = APIRouter(prefix="/api/v1/vehicles", tags=["vehicles"])
 
 
 @router.get("", response_model=List[schemas.VehicleResponse])

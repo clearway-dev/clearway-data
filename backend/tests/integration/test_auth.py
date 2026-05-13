@@ -1,5 +1,5 @@
 """
-Isolated API tests for /api/auth (routers/auth.py).
+Isolated API tests for /api/v1/auth (routers/auth.py).
 
 POST /login/access-token  — happy path, wrong password, unknown user
 GET  /users/me            — 200, 401
@@ -57,7 +57,7 @@ def _reset_overrides():
 
 
 # ===========================================================================
-# POST /api/auth/login/access-token
+# POST /api/v1/auth/login/access-token
 # ===========================================================================
 
 class TestLogin:
@@ -68,7 +68,7 @@ class TestLogin:
         app.dependency_overrides[get_db] = lambda: db
 
         response = client.post(
-            "/api/auth/login/access-token",
+            "/api/v1/auth/login/access-token",
             data={"username": "user@test.com", "password": "testpassword"},
         )
 
@@ -83,7 +83,7 @@ class TestLogin:
         app.dependency_overrides[get_db] = lambda: db
 
         response = client.post(
-            "/api/auth/login/access-token",
+            "/api/v1/auth/login/access-token",
             data={"username": "user@test.com", "password": "WRONG"},
         )
 
@@ -96,7 +96,7 @@ class TestLogin:
         app.dependency_overrides[get_db] = lambda: db
 
         response = client.post(
-            "/api/auth/login/access-token",
+            "/api/v1/auth/login/access-token",
             data={"username": "nobody@example.com", "password": "pw"},
         )
 
@@ -104,7 +104,7 @@ class TestLogin:
 
 
 # ===========================================================================
-# GET /api/auth/users/me
+# GET /api/v1/auth/users/me
 # ===========================================================================
 
 class TestUsersMe:
@@ -113,7 +113,7 @@ class TestUsersMe:
         # No get_db override needed — endpoint has no db dependency
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get("/api/auth/users/me")
+        response = client.get("/api/v1/auth/users/me")
 
         assert response.status_code == 200
         body = response.json()
@@ -122,13 +122,13 @@ class TestUsersMe:
 
     def test_401_missing_token(self):
         # No overrides at all — real JWT validation raises 401
-        response = client.get("/api/auth/users/me")
+        response = client.get("/api/v1/auth/users/me")
 
         assert response.status_code == 401
 
 
 # ===========================================================================
-# GET /api/auth/users  (admin only)
+# GET /api/v1/auth/users  (admin only)
 # ===========================================================================
 
 class TestListUsers:
@@ -139,7 +139,7 @@ class TestListUsers:
         app.dependency_overrides[get_db] = lambda: db
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
-        response = client.get("/api/auth/users")
+        response = client.get("/api/v1/auth/users")
 
         assert response.status_code == 200
         emails = [u["email"] for u in response.json()]
@@ -150,13 +150,13 @@ class TestListUsers:
         app.dependency_overrides[get_db] = lambda: MagicMock()
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get("/api/auth/users")
+        response = client.get("/api/v1/auth/users")
 
         assert response.status_code == 403
 
 
 # ===========================================================================
-# POST /api/auth/users  (admin only)
+# POST /api/v1/auth/users  (admin only)
 # ===========================================================================
 
 class TestCreateUser:
@@ -171,7 +171,7 @@ class TestCreateUser:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.post(
-            "/api/auth/users",
+            "/api/v1/auth/users",
             json={"email": "new@test.com", "password": "pw", "role": "dispatcher"},
         )
 
@@ -186,7 +186,7 @@ class TestCreateUser:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.post(
-            "/api/auth/users",
+            "/api/v1/auth/users",
             json={"email": "user@test.com", "password": "pw"},
         )
 
@@ -197,7 +197,7 @@ class TestCreateUser:
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
         response = client.post(
-            "/api/auth/users",
+            "/api/v1/auth/users",
             json={"email": "x@x.com", "password": "pw"},
         )
 
@@ -205,7 +205,7 @@ class TestCreateUser:
 
 
 # ===========================================================================
-# PUT /api/auth/users/{user_id}  (admin only)
+# PUT /api/v1/auth/users/{user_id}  (admin only)
 # ===========================================================================
 
 class TestUpdateUser:
@@ -222,7 +222,7 @@ class TestUpdateUser:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.put(
-            "/api/auth/users/1",
+            "/api/v1/auth/users/1",
             json={"full_name": "New Name"},
         )
 
@@ -235,13 +235,13 @@ class TestUpdateUser:
         app.dependency_overrides[get_db] = lambda: db
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
-        response = client.put("/api/auth/users/999", json={"full_name": "Ghost"})
+        response = client.put("/api/v1/auth/users/999", json={"full_name": "Ghost"})
 
         assert response.status_code == 404
 
 
 # ===========================================================================
-# DELETE /api/auth/users/{user_id}  (admin only)
+# DELETE /api/v1/auth/users/{user_id}  (admin only)
 # ===========================================================================
 
 class TestDeleteUser:
@@ -255,7 +255,7 @@ class TestDeleteUser:
         # Admin has id=2 → deleting user with id=1 → not self
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
-        response = client.delete("/api/auth/users/1")
+        response = client.delete("/api/v1/auth/users/1")
 
         assert response.status_code == 204
 
@@ -264,6 +264,6 @@ class TestDeleteUser:
         # current_user.id == 2, trying to delete id=2 → self
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
-        response = client.delete("/api/auth/users/2")
+        response = client.delete("/api/v1/auth/users/2")
 
         assert response.status_code == 400

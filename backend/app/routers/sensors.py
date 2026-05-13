@@ -8,7 +8,7 @@ from app import models, schemas
 from app.database import get_db
 from app.deps import get_current_active_user, require_admin
 
-router = APIRouter(prefix="/api/sensors", tags=["sensors"])
+router = APIRouter(prefix="/api/v1/sensors", tags=["sensors"])
 
 
 @router.get("", response_model=List[schemas.SensorResponse])
@@ -17,7 +17,7 @@ async def get_sensors(
     current_user: models.User = Depends(get_current_active_user)
 ):
     """
-    Get list of all sensors
+    Get list of all active sensors.
 
     Requires: Active user authentication
     """

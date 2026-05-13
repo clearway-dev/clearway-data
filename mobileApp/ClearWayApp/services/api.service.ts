@@ -3,7 +3,7 @@ import { AuthService } from './auth.service';
 import { ApiConfig } from '../config/api.config';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api-mobile.clearway.zephyron.tech';
-const API_PREFIX = '/api';
+const API_PREFIX = '/api/v1';
 
 /**
  * Custom error class that includes HTTP status code

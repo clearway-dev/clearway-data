@@ -24,7 +24,7 @@ interface Props {
 export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
   const { sessionId } = route.params;
   const [isPaused, setIsPaused] = useState(false);
-  const [systemPaused, setSystemPaused] = useState(false); // Flag pro systémovou pauzu
+  const [systemPaused, setSystemPaused] = useState(false); // True when the system (not the user) triggered the pause
   const appState = useRef(AppState.currentState);
 
   // Hooks
@@ -59,7 +59,7 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       console.log('AppState changed:', appState.current, '->', nextAppState);
       
-      // Aplikace přechází do pozadí BĚHEM aktivního měření
+      // App goes to background during active measurement — auto-pause to prevent silent data loss.
       if (
         appState.current === 'active' &&
         (nextAppState === 'background' || nextAppState === 'inactive') &&
@@ -69,23 +69,22 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
         console.warn('⚠️ App going to background during active measurement - auto-pausing');
         stopRecording();
         setIsPaused(true);
-        setSystemPaused(true); // Označit, že pauza byla systémová
+        setSystemPaused(true);
       }
-      
-      // Aplikace se vrací do popředí
+
+      // App returns to foreground after a system-initiated pause — notify the user.
       if (
         (appState.current === 'background' || appState.current === 'inactive') &&
         nextAppState === 'active' &&
         systemPaused
       ) {
         console.log('✓ App returned to foreground - measurement paused by system');
-        // Uživatel se vrátil - zobrazíme alert, že měření bylo pozastaveno
         Alert.alert(
           'Měření pozastaveno',
           'Měření bylo automaticky pozastaveno při odchodu aplikace na pozadí. Spusťte měření znovu tlačítkem "Pokračovat".',
           [{ text: 'OK' }]
         );
-        setSystemPaused(false); // Reset flagu
+        setSystemPaused(false);
       }
 
       appState.current = nextAppState;

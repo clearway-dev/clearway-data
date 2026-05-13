@@ -63,31 +63,28 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    # Serializace
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
 
-    # Spolehlivost — globální výchozí hodnoty (přepisují se dekorátorem na tasku)
+    # acks_late + reject_on_worker_lost ensure at-least-once delivery for long batch jobs.
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     task_track_started=True,
 
-    # Prefetch: worker si bere jen 1 task najednou — klíčové pro dlouhé batch úlohy
+    # Prefetch 1: worker takes only one task at a time — critical for long-running batches.
     worker_prefetch_multiplier=1,
 
-    # Time limity: soft → graceful SIGTERM, hard → SIGKILL
+    # soft → graceful SIGTERM, hard → SIGKILL
     task_soft_time_limit=270,
     task_time_limit=300,
 
-    # Výsledky: ukládáme (potřebujeme status), ale po 1h z Redis zmizí
     task_ignore_result=False,
-    result_expires=3600,
+    result_expires=3600,  # Results expire from Redis after 1 hour.
 
-    # Redis broker: visibility_timeout musí být >= task_time_limit
-    # Pokud worker nestihne task za 600s, Redis ho vrátí do fronty (re-queue)
+    # visibility_timeout must be >= task_time_limit to prevent Redis re-queuing an in-progress task.
     broker_transport_options={
         "visibility_timeout": 600,
         "retry_policy": {"timeout": 5.0},
@@ -211,9 +208,9 @@ def _map_match(
                 degrees(ST_Azimuth(ST_StartPoint(rs.geom), ST_EndPoint(rs.geom))) AS road_heading,
                 ST_Distance(rs.geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) AS distance
             FROM road_segments rs
-            -- Nejprve pomocí rychlého indexu ořízneme hledání na malý čtvereček (cca odpovídá tvému max_dist)
-            WHERE rs.geom && ST_Expand(ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :max_dist / 111320.0) 
-            -- Následně seřadíme podle skutečné geometrické vzdálenosti pomocí bleskového operátoru <->
+            -- Bounding box pre-filter using the spatial index (approx. max_dist in degrees).
+            WHERE rs.geom && ST_Expand(ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :max_dist / 111320.0)
+            -- Refine with exact geometric distance using the <-> KNN operator.
             ORDER BY rs.geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
             LIMIT 3;
             """
@@ -329,14 +326,255 @@ def _apply_width_median_filter(widths: list[float], window: int = WIDTH_MEDIAN_W
 
 
 # --------------------------------------------------------------------------- #
-# Celery task
+# Task helpers – each covers one well-defined responsibility
+# --------------------------------------------------------------------------- #
+
+def _check_batch_idempotence(
+    db: Session, batch_uuid, batch_id: str, retries: int, max_retries: int
+) -> dict | None:
+    """Return a completed-response dict if batch is already done, None if processing should proceed.
+
+    Raises BatchNotFoundError when the batch row is missing (triggers Celery retry).
+    """
+    batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+    if not batch:
+        logger.warning(
+            f"Batch {batch_id} not found in database - will retry "
+            f"(attempt {retries + 1}/{max_retries})"
+        )
+        raise BatchNotFoundError(
+            f"Batch {batch_id} not found in database. "
+            f"This may be a race condition - task will retry."
+        )
+    if batch.status == "completed":
+        logger.info(
+            f"Batch {batch_id} already completed (idempotence check) - skipping duplicate processing"
+        )
+        return {"batch_id": batch_id, "status": "completed", "message": "Batch already completed (idempotent retry)"}
+    return None
+
+
+def _load_measurements(db: Session, batch_uuid) -> list[models.RawMeasurement]:
+    """Load all measurements for the batch with session + vehicle eagerly joined."""
+    return (
+        db.query(models.RawMeasurement)
+        .join(models.RawMeasurement.batch)
+        .join(models.Batch.session)
+        .join(models.Session.vehicle)
+        .filter(models.RawMeasurement.batch_id == batch_uuid)
+        .order_by(models.RawMeasurement.measured_at.asc(), models.RawMeasurement.id.asc())
+        .all()
+    )
+
+
+def _preload_existing_invalid_ids(db: Session, measurements: list[models.RawMeasurement]) -> set[int]:
+    """Return IDs already present in invalid_measurements to avoid duplicate inserts on retry."""
+    measurement_ids = [m.id for m in measurements]
+    return {
+        row.raw_measurement_id
+        for row in db.query(models.InvalidMeasurement.raw_measurement_id)
+        .filter(models.InvalidMeasurement.raw_measurement_id.in_(measurement_ids))
+        .all()
+    }
+
+
+def _reject_measurement(
+    m: models.RawMeasurement,
+    reason: str,
+    prometheus_label: str,
+    existing_invalid_ids: set[int],
+    invalid_records: list[models.InvalidMeasurement],
+) -> None:
+    """Mark a measurement invalid and append an InvalidMeasurement record (deduplication guard)."""
+    m.is_valid = False
+    if m.id not in existing_invalid_ids:
+        invalid_records.append(
+            models.InvalidMeasurement(raw_measurement_id=m.id, rejection_reason=reason)
+        )
+        existing_invalid_ids.add(m.id)
+        invalid_measurements_total.labels(reason=prometheus_label).inc()
+
+
+def _check_gps_jump(
+    m: models.RawMeasurement,
+    last_valid: models.RawMeasurement,
+) -> tuple[str, str] | None:
+    """Detect a GPS jump between *m* and the last accepted point.
+
+    Returns (rejection_reason, prometheus_label) when a jump is detected, None otherwise.
+    A time_diff==0 and distance==0 (exact duplicate) is silently accepted as None.
+    """
+    time_diff_s = (m.measured_at - last_valid.measured_at).total_seconds()
+    distance_m = _haversine_distance_m(
+        last_valid.latitude, last_valid.longitude, m.latitude, m.longitude
+    )
+
+    if time_diff_s == 0:
+        if distance_m > 0:
+            reason = "GPS jump detected: Duplicate timestamp with different location"
+            logger.warning(
+                "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
+                "distance_m={:.2f} time_diff_s={:.2f} speed_mps=undefined",
+                m.id, reason, distance_m, time_diff_s,
+            )
+            return reason, "gps_jump_duplicate_timestamp"
+        return None  # exact duplicate (time=0, dist=0) – accepted silently
+
+    if (distance_m / time_diff_s) > MAX_REALISTIC_SPEED_MPS:
+        reason = "GPS jump detected: Unrealistic speed"
+        logger.warning(
+            "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
+            "distance_m={:.2f} time_diff_s={:.2f} speed_mps={:.2f}",
+            m.id, reason, distance_m, time_diff_s, distance_m / time_diff_s,
+        )
+        return reason, "gps_jump_unrealistic_speed"
+
+    return None
+
+
+def _run_phase1_validation(
+    measurements: list[models.RawMeasurement],
+    existing_invalid_ids: set[int],
+) -> tuple[list[models.RawMeasurement], list[models.InvalidMeasurement], int]:
+    """Phase 1 – logical validation and GPS-jump detection.
+
+    Returns (valid_measurements, invalid_records, invalid_count).
+    Mutates *existing_invalid_ids* in-place so Phase 2 sees the updated set.
+    """
+    valid_measurements: list[models.RawMeasurement] = []
+    invalid_records: list[models.InvalidMeasurement] = []
+    invalid_count = 0
+    last_valid_point: models.RawMeasurement | None = None
+
+    for m in measurements:
+        errors = _validate_measurement_logic(m)
+        if errors:
+            invalid_count += 1
+            reason = "; ".join(errors)
+            _reject_measurement(m, reason, "logical_validation", existing_invalid_ids, invalid_records)
+            logger.debug(f"Measurement {m.id} rejected at logical validation: {reason}")
+            continue
+
+        if last_valid_point is not None:
+            jump = _check_gps_jump(m, last_valid_point)
+            if jump is not None:
+                invalid_count += 1
+                _reject_measurement(m, jump[0], jump[1], existing_invalid_ids, invalid_records)
+                continue  # do NOT advance last_valid_point on a rejected jump
+
+        valid_measurements.append(m)
+        last_valid_point = m
+        logger.debug(f"Measurement {m.id} passed logical validation")
+
+    return valid_measurements, invalid_records, invalid_count
+
+
+def _compute_vehicle_heading(
+    prev: models.RawMeasurement | None,
+    current: models.RawMeasurement,
+) -> float | None:
+    """Return the bearing from *prev* to *current*, or None when undefined."""
+    if prev is None:
+        return None
+    if prev.latitude == current.latitude and prev.longitude == current.longitude:
+        return None
+    return _calculate_heading(prev.latitude, prev.longitude, current.latitude, current.longitude)
+
+
+def _run_phase2_map_matching(
+    db: Session,
+    valid_measurements: list[models.RawMeasurement],
+    existing_invalid_ids: set[int],
+) -> tuple[list[dict], list[models.InvalidMeasurement], int, int]:
+    """Phase 2 – snap each valid point to the nearest road segment.
+
+    Returns (matched_points, invalid_records, unmatched_count, invalid_count).
+    Mutates *existing_invalid_ids* in-place (same set passed from Phase 1).
+    """
+    invalid_records: list[models.InvalidMeasurement] = []
+    matched_points: list[dict] = []
+    unmatched_count = 0
+    invalid_count = 0
+    prev_measurement: models.RawMeasurement | None = None
+
+    for m in valid_measurements:
+        vehicle_width: float = m.batch.session.vehicle.width
+        vehicle_heading = _compute_vehicle_heading(prev_measurement, m)
+
+        snapped = _map_match(db, m.latitude, m.longitude, vehicle_heading)
+        if snapped is None:
+            unmatched_count += 1
+            invalid_count += 1
+            reason = f"Map matching failed: no road segment within {MAP_MATCH_MAX_DISTANCE_M:.0f} m"
+            _reject_measurement(m, reason, "map_matching_failed", existing_invalid_ids, invalid_records)
+            logger.debug(
+                f"Measurement {m.id} rejected at map matching: no road segment within {MAP_MATCH_MAX_DISTANCE_M:.0f}m"
+            )
+            continue
+
+        snapped_lat, snapped_lon = snapped
+        matched_points.append({
+            "measurement": m,
+            "snapped_lat": snapped_lat,
+            "snapped_lon": snapped_lon,
+            "raw_width": m.distance_left + m.distance_right + vehicle_width,
+        })
+        prev_measurement = m
+
+    return matched_points, invalid_records, unmatched_count, invalid_count
+
+
+def _build_cleaned_records(matched_points: list[dict]) -> list[models.CleanedMeasurement]:
+    """Apply median filter to widths and produce CleanedMeasurement rows."""
+    matched_points.sort(key=lambda item: (item["measurement"].measured_at, item["measurement"].id))
+    filtered_widths = _apply_width_median_filter([item["raw_width"] for item in matched_points])
+
+    records: list[models.CleanedMeasurement] = []
+    for item, filtered_width in zip(matched_points, filtered_widths):
+        m = item["measurement"]
+        records.append(
+            models.CleanedMeasurement(
+                raw_measurement_id=m.id,
+                cleaned_width=filtered_width,
+                quality_score=None,
+                cluster_id=None,
+                geom=from_shape(Point(item["snapped_lon"], item["snapped_lat"]), srid=4326),
+            )
+        )
+        logger.debug(
+            f"Measurement {m.id} map-matched. Width cleaned: {item['raw_width']:.3f} -> {filtered_width:.3f}"
+        )
+    return records
+
+
+def _mark_batch_failed(batch_uuid, batch_id: str) -> None:
+    """Open a fresh DB session and persist batch status = 'failed' (separate transaction)."""
+    db_fail = SessionLocal()
+    try:
+        failed_batch = db_fail.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+        if failed_batch:
+            failed_batch.status = "failed"
+            db_fail.commit()
+            batches_received_total.labels(status="failed").inc()
+            logger.info(f"Batch {batch_id} marked as 'failed' in database (separate transaction)")
+        else:
+            logger.warning(f"Could not find batch {batch_id} to mark as failed")
+    except Exception as commit_error:
+        logger.error(f"Failed to update batch {batch_id} status to 'failed': {str(commit_error)}")
+        db_fail.rollback()
+    finally:
+        db_fail.close()
+
+
+# --------------------------------------------------------------------------- #
+# Celery task – thin orchestrator, delegates work to helpers above
 # --------------------------------------------------------------------------- #
 
 @celery_app.task(
     name="process_batch_task",
     bind=True,
-    acks_late=True,  # Acknowledge task only after successful completion
-    reject_on_worker_lost=True,  # Requeue task if worker crashes/dies
+    acks_late=True,
+    reject_on_worker_lost=True,
     autoretry_for=(BatchNotFoundError,),
     retry_backoff=True,
     retry_backoff_max=600,
@@ -345,356 +583,74 @@ def _apply_width_median_filter(widths: list[float], window: int = WIDTH_MEDIAN_W
     default_retry_delay=10,
 )
 def process_batch_task(self, batch_id: str) -> dict:
-    """
-    Full async processing pipeline for a batch of raw measurements.
-    
-    NEW: Receives batch_id (UUID as string) instead of array of measurement IDs.
-    Updates batch status throughout processing: pending -> processing -> completed/failed.
+    """Full async processing pipeline: pending → processing → completed/failed.
 
-    1. Load Batch record and update status to 'processing'
-    2. Load RawMeasurement rows via batch_id, joined with Session -> Vehicle
-    3. Phase 1 - logical validation -> mark invalids, bulk-insert invalid_measurements
-    4. Phase 2 - map-match each valid point -> compute cleaned_width,
-       bulk-insert cleaned_measurements
-    5. Update batch status to 'completed' or 'failed'
-    6. Single db.commit() covering all changes
-    
-    Retry configuration:
-    - Automatically retries on BatchNotFoundError (race condition handling)
-    - Max retries: 5
-    - Initial retry delay: 10 seconds
-    - Uses exponential backoff with jitter to prevent thundering herd
-    - Max backoff: 600 seconds (10 minutes)
-    
-    Reliability features:
-    - acks_late=True: Task acknowledged only after successful completion
-    - reject_on_worker_lost=True: Task requeued if worker crashes
-    - Idempotence: Safe to retry - checks if batch already completed
-    - Poison pill handling: After max retries, marks batch as 'failed'
+    Phase 0 – idempotence check (read-only, separate session).
+    Phase 1 – logical validation + GPS-jump detection.
+    Phase 2 – map-matching + median-filter cleaning.
+    Single ACID commit covers all writes.
     """
     import uuid
-    
-    db: Session = SessionLocal()
-    batch_uuid: uuid.UUID | None = None
-    
-    # ====================================================================== #
-    # PHASE 0: IDEMPOTENCE CHECK (separate read-only transaction)
-    # ====================================================================== #
-    try:
-        batch_uuid = uuid.UUID(batch_id)
-        
-        # Read-only check - does not modify data
-        batch_check = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
-        
-        if not batch_check:
-            logger.warning(
-                f"Batch {batch_id} not found in database - will retry "
-                f"(attempt {self.request.retries + 1}/{self.max_retries})"
-            )
-            db.close()
-            # Raise custom exception to trigger automatic retry
-            raise BatchNotFoundError(
-                f"Batch {batch_id} not found in database. "
-                f"This may be a race condition - task will retry."
-            )
-        
-        # IDEMPOTENCE: If batch already completed, skip processing
-        if batch_check.status == 'completed':
-            logger.info(
-                f"Batch {batch_id} already completed (idempotence check) - skipping duplicate processing"
-            )
-            db.close()
-            return {
-                "batch_id": batch_id,
-                "status": "completed",
-                "message": "Batch already completed (idempotent retry)",
-            }
-        
-        db.close()
-        
-    except BatchNotFoundError:
-        raise  # Re-raise to trigger retry
-    except Exception as e:
-        db.close()
-        logger.error(f"Error during idempotence check for batch {batch_id}: {str(e)}")
-        raise
-    
-    # ====================================================================== #
-    # MAIN TRANSACTION: All-or-nothing ACID processing
-    # ====================================================================== #
+
+    batch_uuid = uuid.UUID(batch_id)
+
+    # ---------------------------------------------------------------------- #
+    # Phase 0: idempotence check (separate read-only transaction)
+    # ---------------------------------------------------------------------- #
     db = SessionLocal()
     try:
-        # ------------------------------------------------------------------ #
-        # LOAD BATCH and update status to 'processing'
-        # ------------------------------------------------------------------ #
-        batch: models.Batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
-        
-        if not batch:
-            # Should not happen after idempotence check, but defensive programming
-            raise BatchNotFoundError(f"Batch {batch_id} disappeared between checks")
-        
-        # Start transaction: update batch status to 'processing'
-        batch.status = 'processing'
-        # DO NOT commit yet - this is part of the main transaction
-
-        # ------------------------------------------------------------------ #
-        # LOAD - measurements with session + vehicle eagerly joined
-        # ------------------------------------------------------------------ #
-        measurements: list[models.RawMeasurement] = (
-            db.query(models.RawMeasurement)
-            .join(models.RawMeasurement.batch)
-            .join(models.Batch.session)
-            .join(models.Session.vehicle)
-            .filter(models.RawMeasurement.batch_id == batch_uuid)
-            .order_by(models.RawMeasurement.measured_at.asc(), models.RawMeasurement.id.asc())
-            .all()
+        early_return = _check_batch_idempotence(
+            db, batch_uuid, batch_id, self.request.retries, self.max_retries
         )
+        if early_return is not None:
+            return early_return
+    except BatchNotFoundError:
+        raise
+    except Exception as e:
+        logger.error(f"Error during idempotence check for batch {batch_id}: {str(e)}")
+        raise
+    finally:
+        db.close()
 
+    # ---------------------------------------------------------------------- #
+    # Main transaction: all-or-nothing ACID processing
+    # ---------------------------------------------------------------------- #
+    db = SessionLocal()
+    try:
+        batch = db.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
+        if not batch:
+            raise BatchNotFoundError(f"Batch {batch_id} disappeared between checks")
+        batch.status = "processing"
+
+        measurements = _load_measurements(db, batch_uuid)
         logger.info(f"Worker started processing batch {batch_id} ({len(measurements)} measurements)")
 
-        # Pre-load existing invalid IDs to avoid duplicate entries on retry.
-        measurement_ids = [m.id for m in measurements]
-        existing_invalid_ids: set[int] = {
-            row.raw_measurement_id
-            for row in db.query(models.InvalidMeasurement.raw_measurement_id)
-            .filter(models.InvalidMeasurement.raw_measurement_id.in_(measurement_ids))
-            .all()
-        }
+        existing_invalid_ids = _preload_existing_invalid_ids(db, measurements)
 
-        # ------------------------------------------------------------------ #
-        # PHASE 1 - Logical validation
-        # ------------------------------------------------------------------ #
-        valid_measurements: list[models.RawMeasurement] = []
-        invalid_records: list[models.InvalidMeasurement] = []
-        invalid_count = 0
-        last_valid_point: models.RawMeasurement | None = None
+        valid_measurements, phase1_invalid, invalid_count = _run_phase1_validation(
+            measurements, existing_invalid_ids
+        )
+        matched_points, phase2_invalid, unmatched_count, phase2_invalid_count = _run_phase2_map_matching(
+            db, valid_measurements, existing_invalid_ids
+        )
+        invalid_count += phase2_invalid_count
 
-        for m in measurements:
-            errors = _validate_measurement_logic(m)
-            if errors:
-                invalid_count += 1
-                m.is_valid = False
-                reason = "; ".join(errors)
-                if m.id not in existing_invalid_ids:
-                    invalid_records.append(
-                        models.InvalidMeasurement(
-                            raw_measurement_id=m.id,
-                            rejection_reason=reason,
-                        )
-                    )
-                    existing_invalid_ids.add(m.id)
-                    
-                    # ✅ PROMETHEUS: Track invalid measurements by reason category
-                    invalid_measurements_total.labels(reason="logical_validation").inc()
-                    
-                logger.debug(
-                    f"Measurement {m.id} rejected at logical validation: {reason}"
-                )
-                continue
+        cleaned_records = _build_cleaned_records(matched_points)
 
-            # Urban canyon / GPS jump detection against last valid point only.
-            if last_valid_point is not None:
-                time_diff_s = (m.measured_at - last_valid_point.measured_at).total_seconds()
-                distance_m = _haversine_distance_m(
-                    last_valid_point.latitude,
-                    last_valid_point.longitude,
-                    m.latitude,
-                    m.longitude,
-                )
-
-                # Handle duplicate timestamp or zero time difference
-                if time_diff_s == 0:
-                    if distance_m > 0:
-                        # Duplicate timestamp but different location - reject
-                        invalid_count += 1
-                        m.is_valid = False
-                        reason = "GPS jump detected: Duplicate timestamp with different location"
-                        if m.id not in existing_invalid_ids:
-                            invalid_records.append(
-                                models.InvalidMeasurement(
-                                    raw_measurement_id=m.id,
-                                    rejection_reason=reason,
-                                )
-                            )
-                            existing_invalid_ids.add(m.id)
-                            
-                            # ✅ PROMETHEUS: Track GPS jump (duplicate timestamp)
-                            invalid_measurements_total.labels(reason="gps_jump_duplicate_timestamp").inc()
-                            
-                        logger.warning(
-                            "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
-                            "distance_m={:.2f} time_diff_s={:.2f} speed_mps=undefined",
-                            m.id,
-                            reason,
-                            distance_m,
-                            time_diff_s,
-                        )
-                        # Important: do not move last_valid_point on invalid jump.
-                        continue
-                    # else: time_diff_s == 0 and distance_m == 0 - exact duplicate, skip quietly
-                    # This is likely duplicate data, ignore and continue without validation error
-                
-                # Check for unrealistic speed when time_diff_s > 0
-                elif (distance_m / time_diff_s) > MAX_REALISTIC_SPEED_MPS:
-                    invalid_count += 1
-                    m.is_valid = False
-                    reason = "GPS jump detected: Unrealistic speed"
-                    if m.id not in existing_invalid_ids:
-                        invalid_records.append(
-                            models.InvalidMeasurement(
-                                raw_measurement_id=m.id,
-                                rejection_reason=reason,
-                            )
-                        )
-                        existing_invalid_ids.add(m.id)
-                        
-                        # ✅ PROMETHEUS: Track GPS jump (unrealistic speed)
-                        invalid_measurements_total.labels(reason="gps_jump_unrealistic_speed").inc()
-                        
-                    speed_mps = distance_m / time_diff_s
-                    logger.warning(
-                        "measurement_evaluation id={} status=invalid stage=gps_jump_check reason='{}' "
-                        "distance_m={:.2f} time_diff_s={:.2f} speed_mps={:.2f}",
-                        m.id,
-                        reason,
-                        distance_m,
-                        time_diff_s,
-                        speed_mps,
-                    )
-                    # Important: do not move last_valid_point on invalid jump.
-                    continue
-
-            valid_measurements.append(m)
-            last_valid_point = m
-            logger.debug(
-                f"Measurement {m.id} passed logical validation"
-            )
-
-        # ------------------------------------------------------------------ #
-        # PHASE 2 - Map-matching + cleaned_measurements
-        # ------------------------------------------------------------------ #
-        cleaned_records: list[models.CleanedMeasurement] = []
-        unmatched_count = 0
-
-        matched_points: list[dict] = []
-        
-        # Track previous valid measurement for heading calculation
-        prev_measurement: models.RawMeasurement | None = None
-
-        for m in valid_measurements:
-            vehicle_width: float = m.batch.session.vehicle.width
-            
-            # Calculate vehicle heading from consecutive GPS points
-            vehicle_heading: float | None = None
-            if prev_measurement is not None:
-                # Only calculate heading if points are different
-                if (prev_measurement.latitude != m.latitude or 
-                    prev_measurement.longitude != m.longitude):
-                    vehicle_heading = _calculate_heading(
-                        prev_measurement.latitude,
-                        prev_measurement.longitude,
-                        m.latitude,
-                        m.longitude
-                    )
-
-            snapped = _map_match(db, m.latitude, m.longitude, vehicle_heading)
-            if snapped is None:
-                # No road segment within range - mark as invalid and record reason.
-                unmatched_count += 1
-                invalid_count += 1
-                m.is_valid = False
-
-                if m.id not in existing_invalid_ids:
-                    invalid_records.append(
-                        models.InvalidMeasurement(
-                            raw_measurement_id=m.id,
-                            rejection_reason=(
-                                f"Map matching failed: no road segment within "
-                                f"{MAP_MATCH_MAX_DISTANCE_M:.0f} m"
-                            ),
-                        )
-                    )
-                    existing_invalid_ids.add(m.id)
-                    
-                    # ✅ PROMETHEUS: Track map-matching failures
-                    invalid_measurements_total.labels(reason="map_matching_failed").inc()
-
-                logger.debug(
-                    f"Measurement {m.id} rejected at map matching: no road segment within {MAP_MATCH_MAX_DISTANCE_M:.0f}m"
-                )
-                continue
-
-            snapped_lat, snapped_lon = snapped
-            raw_width = m.distance_left + m.distance_right + vehicle_width
-
-            matched_points.append(
-                {
-                    "measurement": m,
-                    "snapped_lat": snapped_lat,
-                    "snapped_lon": snapped_lon,
-                    "raw_width": raw_width,
-                }
-            )
-            
-            # Update previous measurement for next heading calculation
-            prev_measurement = m
-
-        # Final cleaning step: median filter AFTER map-matching.
-        # Batch is already chronologically ordered and belongs to one vehicle.
-        matched_points.sort(key=lambda item: (item["measurement"].measured_at, item["measurement"].id))
-        matched_raw_widths = [item["raw_width"] for item in matched_points]
-        filtered_widths = _apply_width_median_filter(matched_raw_widths)
-
-        for item, filtered_width in zip(matched_points, filtered_widths):
-            m = item["measurement"]
-            snapped_lat = item["snapped_lat"]
-            snapped_lon = item["snapped_lon"]
-
-            cleaned_records.append(
-                models.CleanedMeasurement(
-                    raw_measurement_id=m.id,
-                    cleaned_width=filtered_width,
-                    quality_score=None,  # reserved for future scoring logic
-                    cluster_id=None,
-                    geom=from_shape(Point(snapped_lon, snapped_lat), srid=4326),
-                )
-            )
-
-            logger.debug(
-                f"Measurement {m.id} map-matched. Width cleaned: {item['raw_width']:.3f} -> {filtered_width:.3f}"
-            )
-
+        all_invalid = phase1_invalid + phase2_invalid
+        if all_invalid:
+            db.bulk_save_objects(all_invalid)
         if cleaned_records:
             db.bulk_save_objects(cleaned_records)
 
-        # Add invalid rows created during phase 2 (unmatched map-matching).
-        if invalid_records:
-            db.bulk_save_objects(invalid_records)
-
-        # ------------------------------------------------------------------ #
-        # FINAL STEP: Update batch status to 'completed'
-        # ------------------------------------------------------------------ #
-        batch.status = 'completed'
-        
-        # ------------------------------------------------------------------ #
-        # ATOMIC COMMIT: All-or-nothing - single point of persistence
-        # ------------------------------------------------------------------ #
-        # This commits:
-        # 1. batch.status = 'processing' (from start)
-        # 2. All m.is_valid = False updates on RawMeasurement
-        # 3. All InvalidMeasurement inserts (phase 1 + phase 2)
-        # 4. All CleanedMeasurement inserts
-        # 5. batch.status = 'completed' (final state)
+        batch.status = "completed"
         db.commit()
-        
-        # ✅ PROMETHEUS: Update batch status counter (completed)
+
         batches_received_total.labels(status="completed").inc()
-        
         logger.info(
             f"Batch {batch_id} completed - processed={len(measurements)} "
             f"valid/cleaned={len(cleaned_records)} dropped={invalid_count} unmatched={unmatched_count}"
         )
-
         return {
             "batch_id": batch_id,
             "status": "completed",
@@ -704,77 +660,33 @@ def process_batch_task(self, batch_id: str) -> dict:
             "unmatched": unmatched_count,
             "message": "Batch processing completed successfully",
         }
-        
+
     except BatchNotFoundError:
-        # ------------------------------------------------------------------ #
-        # ROLLBACK on race condition - let Celery retry
-        # ------------------------------------------------------------------ #
         logger.warning(f"Batch {batch_id} not found during processing - rolling back transaction")
         db.rollback()
         db.close()
-        raise  # Re-raise to trigger Celery automatic retry
-        
+        raise
+
     except Exception as e:
-        # ------------------------------------------------------------------ #
-        # ROLLBACK on ANY error - restore database to clean state
-        # ------------------------------------------------------------------ #
         logger.error(f"Error during batch {batch_id} processing: {str(e)} - rolling back all changes")
-        db.rollback()  # CRITICAL: Undo ALL changes in this transaction
+        db.rollback()
         db.close()
-        
-        # ------------------------------------------------------------------ #
-        # AUTO-RETRY logic for transient errors (e.g., DB connection issues)
-        # ------------------------------------------------------------------ #
-        # Check if we have retries remaining
+
         if self.request.retries < 3:
             logger.warning(
                 f"Batch {batch_id} encountered error (attempt {self.request.retries + 1}/3): {str(e)} - will retry in 60s"
             )
-            # Retry with 60 second countdown
             raise self.retry(exc=e, countdown=60, max_retries=3)
-        
-        # ------------------------------------------------------------------ #
-        # POISON PILL HANDLING - Max retries exhausted
-        # ------------------------------------------------------------------ #
+
         logger.error(
             f"Batch {batch_id} failed after {self.request.retries + 1} attempts (poison pill detected): {str(e)}"
         )
-        
-        # Mark batch as 'failed' in database to prevent infinite retries
-        # IMPORTANT: This is a NEW, SEPARATE transaction (previous one was rolled back)
-        if batch_uuid is not None:
-            db_fail = SessionLocal()  # Fresh session for failure logging
-            try:
-                failed_batch = db_fail.query(models.Batch).filter(models.Batch.id == batch_uuid).first()
-                if failed_batch:
-                    failed_batch.status = 'failed'
-                    db_fail.commit()  # Separate transaction for failure marker
-                    
-                    # ✅ PROMETHEUS: Update batch status counter (failed)
-                    batches_received_total.labels(status="failed").inc()
-                    
-                    logger.info(f"Batch {batch_id} marked as 'failed' in database (separate transaction)")
-                else:
-                    logger.warning(f"Could not find batch {batch_id} to mark as failed")
-            except Exception as commit_error:
-                logger.error(f"Failed to update batch {batch_id} status to 'failed': {str(commit_error)}")
-                db_fail.rollback()
-            finally:
-                db_fail.close()
-        else:
-            logger.warning(f"Cannot mark batch as failed - batch_uuid not parsed from {batch_id}")
-        
-        # Log full exception details for debugging
+        _mark_batch_failed(batch_uuid, batch_id)
         logger.exception(f"Full traceback for failed batch {batch_id}")
-        
-        # Re-raise the original exception to mark task as failed in Celery
         raise
-        
+
     finally:
-        # ------------------------------------------------------------------ #
-        # CLEANUP: Ensure session is always closed
-        # ------------------------------------------------------------------ #
         try:
             db.close()
         except Exception:
-            pass  # Ignore errors during cleanup
+            pass

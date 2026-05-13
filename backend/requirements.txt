@@ -1,40 +1,40 @@
-# --- Jádro aplikace (API a Validace) ---
+# --- Core (API and Validation) ---
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.6
 pydantic-settings==2.7.1
 python-dotenv==1.0.0
 
-# --- Databáze a Migrace ---
+# --- Database and Migrations ---
 sqlalchemy==2.0.23
 alembic==1.12.1
-psycopg2-binary==2.9.9  # Ovladač pro připojení k PostgreSQL
+psycopg2-binary==2.9.9  # PostgreSQL driver
 
-# --- Geoprostorová data (PostGIS) ---
-geoalchemy2==0.14.2     # Rozšíření SQLAlchemy pro práci s PostGIS (třeba typ Geometry)
-Shapely==2.0.6          # Knihovna pro manipulaci s geometrií v Pythonu (často ji GeoAlchemy2 potřebuje)
+# --- Geospatial (PostGIS) ---
+geoalchemy2==0.14.2     # SQLAlchemy extension for PostGIS (Geometry type)
+Shapely==2.0.6          # Geometry manipulation library (required by GeoAlchemy2)
 numpy<2.0.0
-osmnx==1.9.3            # Stahování a zpracování OSM silniční sítě (seed_roads, osm_service)
-scipy==1.13.1           # 1D median filter pro odstraneni width spikes ve workeru
+osmnx==1.9.3            # OSM road network download and processing (seed_roads, osm_service)
+scipy==1.13.1           # 1D median filter for smoothing width spikes in the worker
 
-# --- Asynchronní zpracování (Worker a Fronta) ---
-celery==5.3.6           # Nástroj pro běh asynchronních úloh na pozadí
-redis==5.0.1            # Klient pro Redis (slouží jako message broker pro Celery)
+# --- Async Task Queue ---
+celery==5.3.6           # Async task runner
+redis==5.0.1            # Redis client — message broker for Celery
 
-# --- Logování ---
+# --- Logging ---
 loguru==0.7.2
 
-# --- Monitoring a Metriky (Prometheus + Grafana) ---
-prometheus-fastapi-instrumentator==7.0.0  # Automatická instrumentace FastAPI s Prometheus
-prometheus-client==0.20.0                  # Vytváření custom metrik (Counter, Gauge, Histogram)
-flower==2.0.1                              # Celery monitoring UI s Prometheus exportem
+# --- Monitoring and Metrics (Prometheus + Grafana) ---
+prometheus-fastapi-instrumentator==7.0.0  # Automatic FastAPI instrumentation
+prometheus-client==0.20.0                  # Custom metrics (Counter, Gauge, Histogram)
+flower==2.0.1                              # Celery monitoring UI with Prometheus export
 
-# --- Autentizace a Bezpečnost ---
-passlib[bcrypt]==1.7.4      # Hashování hesel (bcrypt)
-python-jose[cryptography]==3.3.0  # JWT tokeny
-python-multipart==0.0.6     # Pro OAuth2PasswordRequestForm
+# --- Authentication and Security ---
+passlib[bcrypt]==1.7.4      # Password hashing (bcrypt)
+python-jose[cryptography]==3.3.0  # JWT tokens
+python-multipart==0.0.6     # Required for OAuth2PasswordRequestForm
 
-# --- Testování ---
+# --- Testing ---
 pytest==8.3.5
 pytest-cov==5.0.0
 pytest-asyncio==0.24.0

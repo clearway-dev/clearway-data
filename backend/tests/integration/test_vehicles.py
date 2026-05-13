@@ -1,5 +1,5 @@
 """
-Isolated API tests for /api/vehicles (routers/vehicles.py).
+Isolated API tests for /api/v1/vehicles (routers/vehicles.py).
 
 Architecture
 ────────────
@@ -14,6 +14,7 @@ so the real OAuth2PasswordBearer raises the expected error.
 Test count: 3-4 per endpoint.
 """
 import pytest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -29,6 +30,7 @@ from app.deps import get_current_active_user
 # ---------------------------------------------------------------------------
 
 _VEHICLE_ID = uuid4()
+_NOW = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
 # SimpleNamespace gives attribute access that Pydantic's from_attributes=True
 # can read (same as a SQLAlchemy model instance, without touching the DB).
@@ -36,6 +38,8 @@ _MOCK_VEHICLE = SimpleNamespace(
     id=_VEHICLE_ID,
     vehicle_name="Test Van",
     width=220.0,
+    created_at=_NOW,
+    updated_at=_NOW,
 )
 
 _DISPATCHER = SimpleNamespace(id=1, email="user@test.com", role="dispatcher", is_active=True)
@@ -63,11 +67,13 @@ def _db_returning_first(obj):
 def _db_for_create(assigned_id=_VEHICLE_ID):
     """
     Mock session for POST endpoint.
-    db.refresh(vehicle_obj) simulates the DB assigning a UUID primary key.
+    db.refresh(vehicle_obj) simulates the DB assigning a UUID primary key and timestamps.
     """
     db = MagicMock()
     def _assign_id(obj):
         obj.id = assigned_id
+        obj.created_at = _NOW
+        obj.updated_at = _NOW
     db.refresh.side_effect = _assign_id
     return db
 
@@ -90,7 +96,7 @@ client = TestClient(app, raise_server_exceptions=False)
 
 
 # ===========================================================================
-# GET /api/vehicles
+# GET /api/v1/vehicles
 # ===========================================================================
 
 class TestGetVehicles:
@@ -99,7 +105,7 @@ class TestGetVehicles:
         app.dependency_overrides[get_db] = lambda: _db_returning_list([_MOCK_VEHICLE])
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get("/api/vehicles")
+        response = client.get("/api/v1/vehicles")
 
         assert response.status_code == 200
         data = response.json()
@@ -112,7 +118,7 @@ class TestGetVehicles:
         app.dependency_overrides[get_db] = lambda: _db_returning_list([])
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get("/api/vehicles")
+        response = client.get("/api/v1/vehicles")
 
         assert response.status_code == 200
         assert response.json() == []
@@ -121,13 +127,13 @@ class TestGetVehicles:
         # No auth override → real OAuth2PasswordBearer runs → no token → 401
         app.dependency_overrides[get_db] = lambda: _db_returning_list([])
 
-        response = client.get("/api/vehicles")
+        response = client.get("/api/v1/vehicles")
 
         assert response.status_code == 401
 
 
 # ===========================================================================
-# POST /api/vehicles
+# POST /api/v1/vehicles
 # ===========================================================================
 
 class TestCreateVehicle:
@@ -139,7 +145,7 @@ class TestCreateVehicle:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.post(
-            "/api/vehicles",
+            "/api/v1/vehicles",
             json={"vehicle_name": "Fire Truck", "width": 250.0},
         )
 
@@ -155,7 +161,7 @@ class TestCreateVehicle:
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
         response = client.post(
-            "/api/vehicles",
+            "/api/v1/vehicles",
             json={"vehicle_name": "Stealth Van", "width": 180.0},
         )
 
@@ -167,7 +173,7 @@ class TestCreateVehicle:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.post(
-            "/api/vehicles",
+            "/api/v1/vehicles",
             json={"vehicle_name": "Zero Width", "width": 0},
         )
 
@@ -179,7 +185,7 @@ class TestCreateVehicle:
         app.dependency_overrides[get_current_active_user] = lambda: _ADMIN
 
         response = client.post(
-            "/api/vehicles",
+            "/api/v1/vehicles",
             json={"vehicle_name": "", "width": 100.0},
         )
 
@@ -187,7 +193,7 @@ class TestCreateVehicle:
 
 
 # ===========================================================================
-# GET /api/vehicles/{vehicle_id}
+# GET /api/v1/vehicles/{vehicle_id}
 # ===========================================================================
 
 class TestGetVehicleById:
@@ -196,7 +202,7 @@ class TestGetVehicleById:
         app.dependency_overrides[get_db] = lambda: _db_returning_first(_MOCK_VEHICLE)
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get(f"/api/vehicles/{_VEHICLE_ID}")
+        response = client.get(f"/api/v1/vehicles/{_VEHICLE_ID}")
 
         assert response.status_code == 200
         body = response.json()
@@ -208,13 +214,13 @@ class TestGetVehicleById:
         app.dependency_overrides[get_db] = lambda: _db_returning_first(None)
         app.dependency_overrides[get_current_active_user] = lambda: _DISPATCHER
 
-        response = client.get(f"/api/vehicles/{uuid4()}")
+        response = client.get(f"/api/v1/vehicles/{uuid4()}")
 
         assert response.status_code == 404
 
     def test_401_missing_token(self):
         app.dependency_overrides[get_db] = lambda: _db_returning_first(_MOCK_VEHICLE)
 
-        response = client.get(f"/api/vehicles/{_VEHICLE_ID}")
+        response = client.get(f"/api/v1/vehicles/{_VEHICLE_ID}")
 
         assert response.status_code == 401

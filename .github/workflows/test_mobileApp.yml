@@ -1,7 +1,6 @@
 name: Mobile App CI (Jest Tests)
 
 on:
-  # Spustí se při každém pushi do těchto dvou větví
   push:
     branches:
       - main
@@ -9,7 +8,7 @@ on:
     paths:
       - 'mobileApp/**'
       - '.github/workflows/test_mobileApp.yml'
-  # Spustí se, když budeš chtít větve sloučit
+
   pull_request:
     branches:
       - main
@@ -17,6 +16,9 @@ on:
     paths:
       - 'mobileApp/**'
       - '.github/workflows/test_mobileApp.yml'
+
+  # Allows this workflow to be called from build_mobileApp.yml via needs/uses.
+  workflow_call:
 
 jobs:
   test:
@@ -26,20 +28,16 @@ jobs:
         working-directory: ./mobileApp/ClearWayApp
 
     steps:
-    # 1. Stáhne tvůj kód z repozitáře na virtuální server
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. Nainstaluje Node.js prostředí
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20' # Můžeš změnit na '18', pokud používáš starší verzi
+        node-version: '20'
 
-    # 3. Nainstaluje všechny knihovny (React Native, Expo, Jest atd.)
     - name: Install dependencies
       run: npm install
 
-    # 4. Spustí tvé otestované služby (api.service, database.service atd.)
     - name: Run Jest tests
       run: npm test
