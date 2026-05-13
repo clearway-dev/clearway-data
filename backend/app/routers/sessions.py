@@ -6,7 +6,7 @@ from app import models, schemas
 from app.database import get_db
 from app.deps import get_current_active_user
 
-router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
 
 @router.post("", response_model=schemas.SessionResponse, status_code=status.HTTP_201_CREATED)
@@ -22,7 +22,6 @@ async def create_session(
     Requires: Active user authentication
     """
     try:
-        # Verify sensor exists
         sensor = db.query(models.Sensor).filter(models.Sensor.id == session.sensor_id).first()
         if not sensor:
             raise HTTPException(
@@ -30,7 +29,6 @@ async def create_session(
                 detail=f"Sensor with ID {session.sensor_id} not found"
             )
 
-        # Verify vehicle exists
         vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == session.vehicle_id).first()
         if not vehicle:
             raise HTTPException(
@@ -38,7 +36,6 @@ async def create_session(
                 detail=f"Vehicle with ID {session.vehicle_id} not found"
             )
 
-        # Create new session
         db_session = models.Session(
             sensor_id=session.sensor_id,
             vehicle_id=session.vehicle_id
