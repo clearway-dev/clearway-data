@@ -1,0 +1,227 @@
+name: clearway-data
+
+services:
+  # --- DATABASE (PostGIS + pgRouting) ---
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mobile_db
+    restart: always
+    environment:
+      POSTGRES_DB: clearway_db
+      POSTGRES_USER: clearway
+      POSTGRES_PASSWORD: clearway_dev_password
+    volumes:
+      - ./pg-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - mobile_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clearway"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- REDIS (Celery Broker & Result Backend) ---
+  redis:
+    image: redis:7-alpine
+    container_name: mobile_redis
+    command: redis-server --appendonly yes
+    restart: always
+    networks:
+      - mobile_net
+
+   # --- BACKEND API ---
+  api:
+    image: ghcr.io/clearway-dev/clearway-data-backend:latest
+    container_name: mobile_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://clearway:clearway_dev_password@mobile_db:5432/clearway_db
+      CELERY_BROKER_URL: redis://mobile_redis:6379/0
+      CELERY_RESULT_BACKEND: redis://mobile_redis:6379/0
+      SECRET_KEY: "napis-sem-vlastni-dlouhy-klic-12345"
+      DEBUG: true
+    networks:
+      - mobile_net
+      - web_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web_proxy"
+      - "traefik.http.routers.homi-api.rule=Host(`api-mobile.clearway.zephyron.tech`)"
+      - "traefik.http.routers.homi-api.entrypoints=websecure"
+      - "traefik.http.routers.homi-api.tls.certresolver=myresolver"
+      - "traefik.http.services.homi-api.loadbalancer.server.port=8000"
+
+      # --- CELERY WORKER ---
+  celery_worker:
+    # Uses the exact same image as the API
+    image: ghcr.io/clearway-dev/clearway-data-backend:latest
+    container_name: mobile_celery_worker
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://clearway:clearway_dev_password@mobile_db:5432/clearway_db
+      CELERY_BROKER_URL: redis://mobile_redis:6379/0
+      CELERY_RESULT_BACKEND: redis://mobile_redis:6379/0
+      WORKER_METRICS_PORT: 8001
+      SECRET_KEY: "napis-sem-vlastni-dlouhy-klic-12345"
+      DEBUG: true
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
+    # Overwrite the default container command to run the Celery worker
+    command: >
+      sh -c "rm -rf /tmp/prometheus_multiproc && mkdir -p /tmp/prometheus_multiproc
+      && celery -A app.worker.celery_app worker --loglevel=info --pool=prefork
+      --concurrency=2 --max-tasks-per-child=200 --max-memory-per-child=400000 -E"
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+        reservations:
+          memory: 512M
+    networks:
+      - mobile_net
+
+  # --- FLOWER (Celery monitoring UI + Prometheus metrics) ---
+  flower:
+    image: ghcr.io/clearway-dev/clearway-data-backend:latest
+    container_name: mobile_flower
+    restart: always
+    depends_on:
+      redis:
+        condition: service_started
+      celery_worker:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://clearway:clearway_dev_password@mobile_db:5432/clearway_db
+      CELERY_BROKER_URL: redis://mobile_redis:6379/0
+      CELERY_RESULT_BACKEND: redis://mobile_redis:6379/0
+      FLOWER_PORT: 5555
+    command: celery -A app.worker.celery_app flower --port=5555
+    networks:
+      - mobile_net
+
+       # --- PGADMIN ---
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: mobile_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: homi@clearway.dev
+      PGADMIN_DEFAULT_PASSWORD: clearway_dev_password
+      PGADMIN_CONFIG_SERVER_MODE: 'True'
+    volumes:
+      - ./pgadmin-data:/var/lib/pgadmin
+    networks:
+      - mobile_net
+      - web_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web_proxy"
+      - "traefik.http.routers.homi-db.rule=Host(`db-mobile.clearway.zephyron.tech`)"
+      - "traefik.http.routers.homi-db.entrypoints=websecure"
+      - "traefik.http.routers.homi-db.tls.certresolver=myresolver"
+      - "traefik.http.services.homi-db.loadbalancer.server.port=80"
+
+       # --- PROMETHEUS ---
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mobile_prometheus
+    restart: always
+    volumes:
+      # Expects Prometheus config in the monitoring folder pushed by CI/CD
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - mobile_net
+
+  # --- POSTGRES EXPORTER (PostgreSQL metrics for Prometheus) ---
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: mobile_postgres_exporter
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: postgresql://clearway:clearway_dev_password@mobile_db:5432/clearway_db?sslmode=disable
+    volumes:
+      - ./monitoring/postgres-exporter/queries.yaml:/queries.yaml:ro
+    command:
+      - "--extend.query-path=/queries.yaml"
+    networks:
+      - mobile_net
+
+  # --- CADVISOR (Container metrics for Prometheus) ---
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    container_name: mobile_cadvisor
+    privileged: true
+    restart: always
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    command:
+      - -logtostderr
+      - --containerd=/run/containerd/containerd.sock
+      - --containerd-namespace=moby
+      - --store_container_labels=true
+    networks:
+      - mobile_net
+
+  # --- GRAFANA ---
+  grafana:
+    # Matches Homi's local version
+    image: grafana/grafana:10.2.2
+    container_name: mobile_grafana
+    restart: always
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: homi
+      GF_SECURITY_ADMIN_PASSWORD: clearway_dev_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://grafana.clearway.zephyron.tech
+    volumes:
+      - ./grafana-data:/var/lib/grafana
+    networks:
+      - mobile_net
+      - web_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web_proxy"
+      - "traefik.http.routers.homi-grafana.rule=Host(`grafana.clearway.zephyron.tech`)"
+      - "traefik.http.routers.homi-grafana.entrypoints=websecure"
+      - "traefik.http.routers.homi-grafana.tls.certresolver=myresolver"
+      - "traefik.http.services.homi-grafana.loadbalancer.server.port=3000"
+
+networks:
+  mobile_net:
+    driver: bridge
+  web_proxy:
+    external: true
+
+volumes:
+  prometheus_data:

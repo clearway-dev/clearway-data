@@ -33,7 +33,7 @@ describe('useSync — sync lifecycle', () => {
   it('starts sync when enabled=true', () => {
     renderHook(() => useSync(true));
 
-    expect(SyncService.startSync).toHaveBeenCalledWith(30000);
+    expect(SyncService.startSync).toHaveBeenCalledWith(60000);
   });
 
   it('does NOT start sync when enabled=false', () => {
