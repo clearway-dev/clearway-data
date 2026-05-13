@@ -163,7 +163,7 @@ export class SyncService {
         console.log(`ℹ️ ${remainingStats.unsynced} measurements still pending sync (will be sent in next cycle)`);
         this.emitStatus({ 
           status: 'success', 
-          message: `Dávka odeslána. Zbývá ${remainingStats.unsynced} měření...`,
+        //message: `Odesláno ${totalSynced} měření. Zbývá ${remainingStats.unsynced}...`,
           timestamp: Date.now()
         });
       } else if (totalSynced > 0 || totalPoisonPills > 0) {
@@ -171,7 +171,7 @@ export class SyncService {
         console.log('✓ All measurements synced');
         this.emitStatus({ 
           status: 'success', 
-          message: `Odesláno ${totalSynced} měření`,
+           message: `Hotovo! Odesláno celkem ${totalSynced} měření`,
           timestamp: Date.now()
         });
       } else {

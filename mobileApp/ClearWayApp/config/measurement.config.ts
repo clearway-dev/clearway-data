@@ -6,6 +6,29 @@
 
 export const MeasurementConfig = {
   /**
+   * GPS tracking interval used by the mobile measurement hook
+   * For maximum frequency, keep this low (50ms = 20 Hz theoretical)
+   * @default 50 ms
+   */
+  locationTrackingIntervalMs: 50,
+  /**
+   * Enable internal metrics that measure effective location callback rate.
+   * Useful for debugging on-device GPS limitations. Disabled by default.
+   */
+    enableLocationMetrics: false,
+
+  /**
+   * Window (ms) used to compute location callbacks per second when metrics are enabled
+   */
+  locationMetricsWindowMs: 5000,
+    /**
+     * Prefer polling mode using `getCurrentPositionAsync` instead of `watchPositionAsync`.
+     * Set to true to use polling; false to use continuous watch.
+     * For aggressive frequency: polling with Balanced/High accuracy often performs better.
+     */
+    preferPolling: true,
+
+  /**
    * Normal distance range for left sensor (in cm)
    */
   NORMAL_DISTANCE_MIN: 85,

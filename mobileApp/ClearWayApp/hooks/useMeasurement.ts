@@ -121,19 +121,21 @@ export const useMeasurement = (sessionId: string | null) => {
           const speed = location.speed != null && location.speed >= 0 ? location.speed : null;
           const accuracy_gps = location.accuracy ?? null;
 
-          await DatabaseService.insertMeasurement({
-            session_id: sessionId,
-            measured_at: new Date().toISOString(),
-            latitude: location.latitude,
-            longitude: location.longitude,
-            distance_left,
-            distance_right,
-            speed,
-            accuracy_gps,
-          });
+              // Fire-and-forget insert to avoid blocking location callbacks.
+              DatabaseService.insertMeasurement({
+                session_id: sessionId,
+                measured_at: new Date().toISOString(),
+                latitude: location.latitude,
+                longitude: location.longitude,
+                distance_left,
+                distance_right,
+                speed,
+                accuracy_gps,
+              }).catch(err => console.error('Failed to insert measurement (async):', err));
 
-          setLastMeasurement({ distance_left, distance_right });
-          setMeasurementCount(prev => prev + 1);
+              // Update UI counters immediately (DB insert happens in background)
+              setLastMeasurement({ distance_left, distance_right });
+              setMeasurementCount(prev => prev + 1);
         } catch (error) {
           console.error('Failed to save measurement:', error);
         }

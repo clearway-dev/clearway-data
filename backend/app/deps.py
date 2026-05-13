@@ -1,4 +1,5 @@
 import time
+from dataclasses import dataclass
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
@@ -11,9 +12,18 @@ from app.schemas import TokenData
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/access-token")
 
-# Cache: email → (User, timestamp). Re-verified against the DB on cache miss.
-# User deactivation takes effect with up to TTL-second delay.
-_user_cache: dict[str, tuple[User, float]] = {}
+
+@dataclass
+class _CachedUser:
+    """Plain data object — not bound to any SQLAlchemy session."""
+    id: int
+    email: str
+    role: str
+    is_active: bool
+
+
+# Cache: email → (_CachedUser, timestamp). TTL 300 s.
+_user_cache: dict[str, tuple[_CachedUser, float]] = {}
 _USER_CACHE_TTL = 300
 
 
@@ -45,7 +55,10 @@ def get_current_user(
     if user is None:
         raise credentials_exception
 
-    _user_cache[token_data.email] = (user, time.time())
+    _user_cache[token_data.email] = (
+        _CachedUser(id=user.id, email=user.email, role=user.role, is_active=user.is_active),
+        time.time(),
+    )
     return user
 
 

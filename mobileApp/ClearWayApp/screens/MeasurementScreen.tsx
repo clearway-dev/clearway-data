@@ -95,12 +95,13 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
     };
   }, [isRecording, isPaused, systemPaused, stopRecording]);
 
-  // Auto-start recording when screen loads
+  // Auto-start recording ONCE when screen mounts with permission granted
+  // ⚠️ Dependencies MUST NOT include isRecording - that would cause infinite loop!
   React.useEffect(() => {
     if (permissionGranted && !isRecording) {
       startRecording();
     }
-  }, [permissionGranted]);
+  }, [permissionGranted, startRecording]);
 
   const handleTogglePause = () => {
     if (isPaused) {

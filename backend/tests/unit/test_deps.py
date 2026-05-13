@@ -28,8 +28,8 @@ def clear_user_cache():
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _user(email="user@test.com", role="dispatcher", is_active=True):
-    return types.SimpleNamespace(email=email, role=role, is_active=is_active)
+def _user(email="user@test.com", role="dispatcher", is_active=True, id=1):
+    return types.SimpleNamespace(id=id, email=email, role=role, is_active=is_active)
 
 
 def _db_returning(user):
@@ -93,6 +93,34 @@ class TestGetCurrentUser:
         get_current_user(token=token, db=db)
 
         db.query.assert_called_once()
+
+    def test_second_call_uses_cache_skips_db(self):
+        """After the first successful lookup the user must be served from cache."""
+        user = _user(email="cached@example.com")
+        db = _db_returning(user)
+        token = _valid_token(email="cached@example.com")
+
+        get_current_user(token=token, db=db)   # populates cache
+        db.query.reset_mock()
+
+        get_current_user(token=token, db=db)   # should hit cache
+
+        db.query.assert_not_called()
+
+    def test_cached_user_has_correct_attributes(self):
+        """_CachedUser returned from cache must expose email, role, is_active."""
+        user = _user(email="check@example.com", role="admin", is_active=True)
+        db = _db_returning(user)
+        token = _valid_token(email="check@example.com", role="admin")
+
+        get_current_user(token=token, db=db)   # populate cache
+        db.query.reset_mock()
+
+        result = get_current_user(token=token, db=db)  # from cache
+
+        assert result.email == "check@example.com"
+        assert result.role == "admin"
+        assert result.is_active is True
 
 
 # ===========================================================================
