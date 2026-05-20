@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models import User
 from app.schemas import TokenData
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/access-token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login/access-token")
 
 
 @dataclass
