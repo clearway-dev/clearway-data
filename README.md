@@ -96,7 +96,7 @@ docker-compose up --build
 |---------|-----|
 | API | https://api-mobile.clearway.zephyron.tech |
 | Swagger UI | https://api-mobile.clearway.zephyron.tech/docs |
-| Grafana | /https://grafana.clearway.zephyron.tech/ |
+| Grafana | https://grafana.clearway.zephyron.tech/ |
 
 
 ## Services
