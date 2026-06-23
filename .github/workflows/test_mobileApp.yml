@@ -3,7 +3,6 @@ name: Mobile App CI (Jest Tests)
 on:
   push:
     branches:
-      - main
       - dev
     paths:
       - 'mobileApp/**'
