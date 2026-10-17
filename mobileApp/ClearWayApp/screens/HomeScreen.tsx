@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { Button } from '../components/ui/Button';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { useAuth } from '../contexts/AuthContext';
+import { useBle } from '../contexts/BleContext';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -13,6 +14,7 @@ interface Props {
 
 export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const { user, logout } = useAuth();
+  const { status: merakStatus, deviceName, linkOk } = useBle();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isAdmin = user?.role === 'admin';
@@ -51,6 +53,11 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.userInfo}>
           <Text style={styles.welcomeText}>Přihlášen jako</Text>
           <Text style={styles.userEmail}>{user?.email}</Text>
+          {merakStatus === 'connected' && (
+            <Text style={[styles.merakText, !linkOk && styles.merakTextLost]} testID="headerMerakName">
+              {linkOk ? '●' : '○'} Měřák: {deviceName}
+            </Text>
+          )}
         </View>
         <TouchableOpacity
           testID="logoutButton"
@@ -66,7 +73,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.logo}>ClearWay</Text>
         <Text style={styles.subtitle}>Měření průjezdnosti ulic</Text>
         
@@ -74,6 +81,14 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
           title="START"
           onPress={() => navigation.navigate('Setup')}
           style={styles.startButton}
+        />
+
+        <Button
+          testID="openMerakSetup"
+          title="Nastavit měření"
+          onPress={() => navigation.navigate('MerakSetup')}
+          variant="secondary"
+          style={styles.setupButton}
         />
         
         <Button
@@ -91,7 +106,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
             style={styles.adminButton}
           />
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -115,6 +130,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+    // The scrollable content is rendered after the header and would otherwise cover it, so the
+    // logout button could not be pressed.
+    zIndex: 10,
+    elevation: 10,
   },
   userInfo: {
     flex: 1,
@@ -142,11 +161,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#dc2626',
   },
+  merakText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#16a34a',
+    marginTop: 2,
+  },
+  merakTextLost: {
+    color: '#dc2626',
+  },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+    paddingTop: 110,
+    paddingBottom: 40,
   },
   logo: {
     fontSize: 48,
@@ -162,6 +192,11 @@ const styles = StyleSheet.create({
   startButton: {
     minWidth: 200,
     paddingVertical: 16,
+  },
+  setupButton: {
+    minWidth: 200,
+    paddingVertical: 12,
+    marginTop: 12,
   },
   syncErrorsButton: {
     minWidth: 200,

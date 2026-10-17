@@ -55,7 +55,7 @@ Mobile App (Expo / React Native)
 | Database | PostgreSQL + PostGIS (external — `clearway-infra` repo) |
 | Task queue | Celery 5.3, Redis 7 |
 | Auth | JWT (python-jose + bcrypt) |
-| Mobile | React Native 0.81, Expo 54, TypeScript |
+| Mobile | React Native 0.86, Expo 57, TypeScript |
 | Monitoring | Prometheus, Grafana, cAdvisor, postgres-exporter, Flower |
 | Containerisation | Docker Compose |
 

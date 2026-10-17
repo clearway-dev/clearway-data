@@ -322,3 +322,102 @@ describe('AuthContext.logout()', () => {
     });
   });
 });
+
+// ── login(): must not tear down the login screen, must not leave half a session ─────────
+
+describe('AuthContext.login() — screen stability and clean-up', () => {
+  const Harness: React.FC<{ email?: string }> = ({ email = 'a@b.com' }) => {
+    const { login, isLoading, isAuthenticated } = useAuth();
+    return (
+      <>
+        <Text testID="state">{isLoading ? 'loading' : isAuthenticated ? 'authed' : 'unauthed'}</Text>
+        <Text testID="trigger" onPress={() => login(email, 'pw').catch(() => undefined)} />
+      </>
+    );
+  };
+
+  it('does not switch the whole app to isLoading while a login is in progress', async () => {
+    // isLoading=true makes AppNavigator replace the screen with a loading view, which
+    // unmounted the login form and wiped what the user typed.
+    (AuthService.getToken as jest.Mock).mockResolvedValueOnce(null);
+    let finishLogin!: (v: unknown) => void;
+    (AuthService.login as jest.Mock).mockReturnValueOnce(new Promise((resolve) => (finishLogin = resolve)));
+    (AuthService.getCurrentUser as jest.Mock).mockResolvedValueOnce(mockUser);
+
+    const { getByTestId } = render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(getByTestId('state').props.children).toBe('unauthed'));
+
+    await act(async () => {
+      getByTestId('trigger').props.onPress();
+    });
+    expect(getByTestId('state').props.children).toBe('unauthed'); // still the login screen
+
+    await act(async () => {
+      finishLogin({ access_token: 'tok', token_type: 'bearer' });
+    });
+    await waitFor(() => expect(getByTestId('state').props.children).toBe('authed'));
+  });
+
+  it('clears the stored token when the profile request fails after the password was accepted', async () => {
+    (AuthService.getToken as jest.Mock).mockResolvedValueOnce(null);
+    (AuthService.login as jest.Mock).mockResolvedValueOnce({ access_token: 'tok', token_type: 'bearer' });
+    (AuthService.getCurrentUser as jest.Mock).mockRejectedValueOnce(new Error('HTTP 500: Internal Server Error'));
+
+    const { getByTestId } = render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(getByTestId('state').props.children).toBe('unauthed'));
+
+    await act(async () => {
+      getByTestId('trigger').props.onPress();
+    });
+
+    await waitFor(() => expect(AuthService.clearToken).toHaveBeenCalledTimes(1));
+    expect(getByTestId('state').props.children).toBe('unauthed');
+  });
+
+  it('keeps the token after a successful login', async () => {
+    (AuthService.getToken as jest.Mock).mockResolvedValueOnce(null);
+    (AuthService.login as jest.Mock).mockResolvedValueOnce({ access_token: 'tok', token_type: 'bearer' });
+    (AuthService.getCurrentUser as jest.Mock).mockResolvedValueOnce(mockUser);
+
+    const { getByTestId } = render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(getByTestId('state').props.children).toBe('unauthed'));
+    await act(async () => {
+      getByTestId('trigger').props.onPress();
+    });
+    await waitFor(() => expect(getByTestId('state').props.children).toBe('authed'));
+    expect(AuthService.clearToken).not.toHaveBeenCalled();
+  });
+
+  it('survives clearToken itself failing during clean-up', async () => {
+    (AuthService.getToken as jest.Mock).mockResolvedValueOnce(null);
+    (AuthService.login as jest.Mock).mockRejectedValueOnce(new Error('Invalid credentials'));
+    (AuthService.clearToken as jest.Mock).mockRejectedValueOnce(new Error('storage unavailable'));
+
+    let caught: Error | null = null;
+    const Probe: React.FC = () => {
+      const { login } = useAuth();
+      return <Text testID="trigger" onPress={() => login('a@b.com', 'x').catch((e: Error) => (caught = e))} />;
+    };
+    const { getByTestId } = render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>
+    );
+    await act(async () => {
+      getByTestId('trigger').props.onPress();
+    });
+    await waitFor(() => expect(caught?.message).toBe('Invalid credentials')); // the original error, not the cleanup one
+  });
+});

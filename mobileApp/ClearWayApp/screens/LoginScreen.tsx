@@ -12,21 +12,37 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { getApiBaseUrl } from '../config/api.config';
+import { friendlyLoginError } from '../services/auth-errors';
 
 export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { login } = useAuth();
+  const apiUrl = getApiBaseUrl();
+
+  // The message always stays visible on the screen. A native alert is added on top of it, but
+  // never on the web: React Native Web has no real Alert, so there the inline message is the only
+  // place the user can read what went wrong.
+  const showError = (title: string, message: string) => {
+    setErrorMessage(message);
+    if (Platform.OS !== 'web') {
+      Alert.alert(title, message);
+    }
+  };
 
   const handleLogin = async () => {
+    setErrorMessage(null);
+
     if (!email.trim()) {
-      Alert.alert('Chyba', 'Zadejte prosím email');
+      showError('Chyba', 'Zadejte prosím email');
       return;
     }
 
     if (!password.trim()) {
-      Alert.alert('Chyba', 'Zadejte prosím heslo');
+      showError('Chyba', 'Zadejte prosím heslo');
       return;
     }
 
@@ -36,14 +52,7 @@ export const LoginScreen: React.FC = () => {
       await login(email.trim(), password);
     } catch (error) {
       console.error('Login error:', error);
-      
-      let errorMessage = 'Přihlášení selhalo';
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-
-      Alert.alert('Chyba přihlášení', errorMessage);
+      showError('Chyba přihlášení', friendlyLoginError(error, apiUrl));
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +83,10 @@ export const LoginScreen: React.FC = () => {
                 placeholder="vas@email.cz"
                 placeholderTextColor="#a1a1aa"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (errorMessage) setErrorMessage(null);
+                }}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -90,7 +102,10 @@ export const LoginScreen: React.FC = () => {
                 placeholder="••••••••"
                 placeholderTextColor="#a1a1aa"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (errorMessage) setErrorMessage(null);
+                }}
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -98,6 +113,12 @@ export const LoginScreen: React.FC = () => {
                 onSubmitEditing={handleLogin}
               />
             </View>
+
+            {errorMessage ? (
+              <View style={styles.errorBox} testID="loginError" accessibilityRole="alert">
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               testID="loginButton"
@@ -116,6 +137,9 @@ export const LoginScreen: React.FC = () => {
           <View style={styles.footer}>
             <Text style={styles.footerText}>
               Pro přístup k aplikaci je nutné platné přihlášení
+            </Text>
+            <Text style={styles.serverText} testID="serverUrl">
+              Server: {apiUrl}
             </Text>
           </View>
         </View>
@@ -178,6 +202,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#18181b',
   },
+  errorBox: {
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 4,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#b91c1c',
+    lineHeight: 20,
+  },
   loginButton: {
     backgroundColor: '#3b82f6',
     borderRadius: 8,
@@ -204,5 +242,11 @@ const styles = StyleSheet.create({
     color: '#71717a',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  serverText: {
+    marginTop: 12,
+    fontSize: 12,
+    color: '#a1a1aa',
+    textAlign: 'center',
   },
 });

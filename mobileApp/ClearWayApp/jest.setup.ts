@@ -47,3 +47,10 @@ jest.mock('expo-keep-awake', () => ({
 jest.mock('expo-status-bar', () => ({
   StatusBar: () => null,
 }));
+
+// ── Async timeout ─────────────────────────────────────────────────────────────
+// Live views (console, live card) refresh on a 250–500 ms timer. The default 1 s waitFor limit is
+// too tight when the whole suite runs in parallel workers, so give async utils 3 s. A passing
+// waitFor still returns as soon as its condition holds.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+require('@testing-library/react-native').configure({ asyncUtilTimeout: 3000 });

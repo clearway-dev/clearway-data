@@ -78,7 +78,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      setAuthState(prev => ({ ...prev, isLoading: true }));
+      // No global isLoading here: it makes the app replace the whole screen with a loading
+      // view, which unmounts the login form and wipes what the user typed. The login screen
+      // shows its own progress indicator.
 
       // Login and get token
       const authResponse = await AuthService.login(email, password);
@@ -93,6 +95,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isAuthenticated: true,
       });
     } catch (error) {
+      // The token may already be stored when only the profile request failed; do not keep a
+      // half-finished session around.
+      try {
+        await AuthService.clearToken();
+      } catch {
+        // nothing to clean up
+      }
       setAuthState({
         user: null,
         token: null,

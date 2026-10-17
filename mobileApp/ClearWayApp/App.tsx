@@ -9,11 +9,15 @@ import { MeasurementScreen } from './screens/MeasurementScreen';
 import { SyncErrorsScreen } from './screens/SyncErrorsScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { AdminScreen } from './screens/AdminScreen';
+import { MerakServiceScreen } from './screens/MerakServiceScreen';
+import { MerakSetupScreen } from './screens/MerakSetupScreen';
 import { RootStackParamList } from './types/navigation';
 import { DatabaseService } from './services/database.service';
 import { SyncService } from './services/sync.service';
 import { SyncConfig } from './config/sync.config';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Button } from './components/ui/Button';
+import { BleProvider } from './contexts/BleContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -26,6 +30,10 @@ function AppNavigator() {
   useEffect(() => {
     // Only initialize app if user is authenticated
     if (!authLoading && isAuthenticated) {
+      // Also after a fresh login: the database must be ready before any screen uses it, so the
+      // loading view is shown again instead of initialising in the background.
+      setIsInitialized(false);
+      setInitError(null);
       initializeApp();
     } else if (!authLoading && !isAuthenticated) {
       // User not authenticated, skip app initialization
@@ -98,10 +106,32 @@ function AppNavigator() {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingTitle}>ClearWay</Text>
-        <ActivityIndicator size="large" color="#18181b" style={styles.spinner} />
+        {!initError && <ActivityIndicator size="large" color="#18181b" style={styles.spinner} />}
         <Text style={styles.loadingText}>
           {authLoading ? 'Ověřování...' : initError ? `Chyba: ${initError}` : zombieSyncInfo}
         </Text>
+        {initError && !authLoading && (
+          // Without these the app stayed on this screen forever after an initialisation error.
+          <View style={styles.errorActions}>
+            <Button
+              testID="initRetryButton"
+              title="Zkusit znovu"
+              onPress={() => {
+                setInitError(null);
+                initializeApp();
+              }}
+            />
+            <Button
+              testID="initContinueButton"
+              title="Pokračovat"
+              variant="secondary"
+              onPress={() => {
+                setInitError(null);
+                setIsInitialized(true);
+              }}
+            />
+          </View>
+        )}
       </View>
     );
   }
@@ -126,6 +156,8 @@ function AppNavigator() {
             <Stack.Screen name="Measurement" component={MeasurementScreen} />
             <Stack.Screen name="SyncErrors" component={SyncErrorsScreen} />
             <Stack.Screen name="Admin" component={AdminScreen} />
+            <Stack.Screen name="MerakSetup" component={MerakSetupScreen} />
+            <Stack.Screen name="MerakService" component={MerakServiceScreen} />
           </>
         )}
       </Stack.Navigator>
@@ -136,7 +168,9 @@ function AppNavigator() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppNavigator />
+      <BleProvider>
+        <AppNavigator />
+      </BleProvider>
     </AuthProvider>
   );
 }
@@ -157,6 +191,11 @@ const styles = StyleSheet.create({
   },
   spinner: {
     marginVertical: 20,
+  },
+  errorActions: {
+    marginTop: 24,
+    width: 240,
+    gap: 12,
   },
   loadingText: {
     marginTop: 16,

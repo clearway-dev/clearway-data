@@ -21,6 +21,8 @@ module.exports = {
     // so any file that imports it gets a predictable in-memory stub.
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.ts',
     '^expo-sqlite/.*$': '<rootDir>/__mocks__/expo-sqlite.ts',
+    // The BLE native module is not available in Jest; the transport is injected in tests.
+    '^react-native-ble-plx$': '<rootDir>/__mocks__/react-native-ble-plx.ts',
   },
 
   collectCoverageFrom: [

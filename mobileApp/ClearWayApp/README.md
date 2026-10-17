@@ -2,7 +2,7 @@
 
 React Native / Expo application for road width measurement data collection.
 
-The app connects to an ESP32 ultrasonic sensor over BLE (or generates simulated data in mock mode), records GPS position at 1 Hz, stores measurements locally in SQLite, and syncs them to the backend in the background.
+The app connects to the ClearWay measuring unit (ESP32, Benewake lidars) over BLE (or generates simulated data in mock mode), records GPS position at 1 Hz, stores measurements locally in SQLite, and syncs them to the backend in the background.
 
 ---
 
@@ -10,14 +10,14 @@ The app connects to an ESP32 ultrasonic sensor over BLE (or generates simulated 
 
 | Component | Technology |
 |-----------|------------|
-| Framework | React Native 0.81, Expo 54 |
-| Language | TypeScript 5.9 |
+| Framework | React Native 0.86, Expo 57 |
+| Language | TypeScript 6.0 |
 | Navigation | React Navigation 7 (native stack) |
 | Local storage | expo-sqlite (SQLite) |
 | Auth token | expo-secure-store |
 | HTTP | fetch (via `ApiService`) |
 | GPS | expo-location |
-| BLE | react-native-ble-plx (ESP32 sensor) |
+| BLE | react-native-ble-plx (native), Web Bluetooth (web) |
 | Async storage | @react-native-async-storage/async-storage |
 | Testing | Jest 29 + jest-expo + @testing-library/react-native |
 
@@ -134,16 +134,63 @@ JWT token flow:
 
 ---
 
-## BLE Sensor Protocol
+## BLE measuring unit ("měřák")
 
-The app communicates with an **ESP32** ultrasonic sensor (HC-SR04 × 2) over BLE.
+The app talks to the measuring unit (ESP32-S3 master + ESP32 slave, 4 Benewake lidars each) over
+BLE. The authoritative protocol is `ClearWay-FW/specifikace-zarizeni.md`; the app implements
+protocol 2 (firmware 4.0.0, per-sensor states) and protocol 1 (firmware up to 3.6). The parser is
+checked frame by frame against the reference client `ClearWay-FW/client/meas_client.py` on frames
+recorded from the real unit (`__tests__/fixtures/merak-frames.json`, `merakReference.test.ts`).
 
-Data frames begin with a single-byte command byte:
-- `0xAA` — measurement data (distance_left, distance_right)
-- `0x2A` — heartbeat
-- `0x3E` — command response
+| What | Where |
+|------|-------|
+| Wire protocol (frames, replies, sensor states) | `services/merak/protocol.ts` |
+| What is stored per sensor state | `services/merak/storage-policy.ts` |
+| Console text of a frame | `services/merak/format.ts` |
+| Command catalogue and readable results | `services/merak/commands.ts` |
+| Live data, counters, event log | `services/merak/merak.store.ts` |
+| Native transport (react-native-ble-plx) | `services/merak/transport.ts` |
+| Web transport (Web Bluetooth, Chrome/Edge) | `services/merak/transport.web.ts` |
+| Connection, command queue, measurement control | `contexts/BleContext.tsx` |
+| Setup page: connect button, mode and firmware switch | `screens/MerakSetupScreen.tsx`, `components/merak/MerakConnectCard.tsx` (Home button "Nastavit měření") |
+| All commands incl. service diagnostics | `screens/MerakServiceScreen.tsx` |
+| All values of the unit during a measurement | `components/merak/MerakLiveCard.tsx` |
 
-BLE UUIDs and the full command protocol are documented in `AI_kontext.md`.
+Notification types on the DATA characteristic (first byte):
+- `0x2A` heartbeat, 1 per second
+- `0xAA` data frame: RAW 27 B (8 distances + 8 sensor states), MIN 14 B (minimum and state per unit);
+  protocol 1: 25 B / 13 B without states
+- `0xBB` machine reply to a command (command letter, status, 16-bit value)
+- `0x3E` human readable text reply
+
+**What is stored.** The backend and its pipeline need `distance_left` and `distance_right`
+(`cleaned_width = left + right + vehicle width`) and the database schema must not change. Each side
+is one unit (master = left, slave = right, swappable in the app), summarised by the firmware rule:
+any sensor *too close* > minimum of the OK sensors > *nothing in range* > *fault*.
+
+| Unit state | Stored for that side |
+|------------|----------------------|
+| OK | the shortest valid distance |
+| too close (< 20 cm, dead zone) | `0` cm (worst case; the firmware prefers a false alarm to a missed obstacle) |
+| nothing in range | sample skipped and reported |
+| fault (sensor silent > 100 ms) | sample skipped and reported |
+
+RAW and MIN mode give the same result. A value is never invented.
+
+**Firmware generations.** The "Verze firmware měřáku" switch selects FW 4.0.0 (protocol 2, default)
+or FW 3.6.0 (protocol 1). Frames are decoded by the version in their own byte 1, so a wrong choice
+only raises a warning. A frame of an unknown protocol is shown as hex and not stored.
+
+**Console.** The service screen ("Servis měřáku") ends with a console of everything the unit sends:
+decoded frames in the same form as `meas_client.py`, commands and replies, optional heartbeats and
+raw hex, with pause and clear.
+
+**Running it.**
+- Android/iOS: the native module is not part of Expo Go. Use an EAS development or preview build
+  (`eas build --profile development --platform android`).
+- Web (testing on a PC): `npm run web` and open the page in Chrome or Edge (Web Bluetooth needs
+  HTTPS or localhost). `react-dom` and `react-native-web` must be installed for the web build.
+- The unit accepts a single BLE connection: disconnect Raspberry Pi / other clients first.
 
 ### Mock Mode
 

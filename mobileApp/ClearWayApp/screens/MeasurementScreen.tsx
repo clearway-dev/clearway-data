@@ -7,6 +7,8 @@ import { CustomHeader } from '../components/ui/CustomHeader';
 import { BackendStatusBar } from '../components/BackendStatusBar';
 import { useMeasurement } from '../hooks/useMeasurement';
 import { useSync } from '../hooks/useSync';
+import { useBle } from '../contexts/BleContext';
+import { MerakLiveCard } from '../components/merak/MerakLiveCard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
@@ -23,6 +25,7 @@ interface Props {
 
 export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
   const { sessionId } = route.params;
+  const dataSource = route.params.dataSource ?? 'simulation';
   const [isPaused, setIsPaused] = useState(false);
   const [systemPaused, setSystemPaused] = useState(false); // True when the system (not the user) triggered the pause
   const appState = useRef(AppState.currentState);
@@ -35,23 +38,35 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
     locationError, 
     permissionGranted,
     lastMeasurement,
+    deviceWarning,
+    skippedCount,
     startRecording, 
     stopRecording 
-  } = useMeasurement(sessionId);
+  } = useMeasurement(sessionId, dataSource);
+
+  const { status: merakStatus, deviceName: merakName } = useBle();
   
   const { stats, forceSync } = useSync(isRecording);
 
   // Keep screen awake when recording
+  // Keep-awake is best effort: browsers may refuse the wake lock, and releasing a lock that was never
+  // granted throws. Neither may break the measurement.
   React.useEffect(() => {
+    const release = () => {
+      try {
+        // returns a promise on the web; a rejection there must not end up unhandled
+        Promise.resolve(deactivateKeepAwake()).catch(() => undefined);
+      } catch {
+        // lock was never activated
+      }
+    };
     if (isRecording && !isPaused) {
-      activateKeepAwakeAsync();
+      Promise.resolve(activateKeepAwakeAsync()).catch(() => undefined);
     } else {
-      deactivateKeepAwake();
+      release();
     }
 
-    return () => {
-      deactivateKeepAwake();
-    };
+    return release;
   }, [isRecording, isPaused]);
 
   // Handle app going to background (incoming call, app switch, etc.)
@@ -205,6 +220,26 @@ export const MeasurementScreen: React.FC<Props> = ({ navigation, route }) => {
           </Text>
           <Text style={styles.value}>Měření: {measurementCount}</Text>
         </Card>
+
+        {/* Data source: the measuring unit when connected, otherwise the built-in simulation */}
+        <Card style={styles.card} testID="merakSourceCard">
+          <Text style={styles.label}>Zdroj dat:</Text>
+          <Text style={styles.value} testID="merakSourceText">
+            {dataSource === 'merak'
+              ? merakStatus === 'connected'
+                ? `Měřák (${merakName})`
+                : 'Měřák – NEPŘIPOJEN'
+              : 'Testovací měřák – náhodná data'}
+          </Text>
+          {deviceWarning ? (
+            <Text style={styles.errorText} testID="merakWarning">
+              {deviceWarning}
+            </Text>
+          ) : null}
+          {skippedCount ? <Text style={styles.value}>Přeskočeno bez platných dat: {skippedCount}</Text> : null}
+        </Card>
+
+        {dataSource === 'merak' && <MerakLiveCard />}
 
         {/* Location Info */}
         {locationError && (

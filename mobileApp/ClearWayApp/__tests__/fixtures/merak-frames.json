@@ -1,0 +1,3241 @@
+{
+ "source": "real frames from ESP32bt_MeasLength FW 4.0.0 (protocol 2) + synthetic frames per src/measure.cpp; 'ref' = client/meas_client.py parse_frame()",
+ "real": [
+  {
+   "name": "real raw #0",
+   "hex": "aa21fb0301a701a9ffff01a701a801ad01a101a900000004003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 4,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     423,
+     425,
+     null,
+     423
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 423,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #1",
+   "hex": "aa21fb0301aa01aaffff01a901a901ab01a101a600000072003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 114,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     426,
+     426,
+     null,
+     425
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     422
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 425,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #2",
+   "hex": "aa21fb0301a901acffff01aa01a901ab01a101a6000000d6003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 214,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     425,
+     428,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     422
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 425,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #3",
+   "hex": "aa21fb0301ab01acffff01a901a901ab01a001a700000144003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 324,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     428,
+     null,
+     425
+    ],
+    "slave": [
+     425,
+     427,
+     416,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 425,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 416,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #4",
+   "hex": "aa21fb0301aa01acffff01aa01a901ab01a101a7000001b2003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 434,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     426,
+     428,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #5",
+   "hex": "aa21fb0301ad01adffff01a801a901ab01a101a700000220003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 544,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     429,
+     429,
+     null,
+     424
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 424,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #6",
+   "hex": "aa21fb0301ac01adffff01aa01a901ab01a101a700000284003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 644,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     428,
+     429,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #7",
+   "hex": "aa21fb0301ab01adffff01aa01a901ab01a001a7000002e8003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 744,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     429,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     427,
+     416,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 416,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #8",
+   "hex": "aa21fb0301ab01adffff01aa01a901ab01a101a700000356003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 854,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     429,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #9",
+   "hex": "aa21fb0301ab01adffff01aa01a901ac01a101a7000003ba003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 954,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     429,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     428,
+     417,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #10",
+   "hex": "aa21fb0301ab01acffff01a801a901ab01a101a60000041e003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1054,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     428,
+     null,
+     424
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     422
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 424,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #11",
+   "hex": "aa21fb0301a901acffff01aa01a801ab01a101a60000048c003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1164,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     425,
+     428,
+     null,
+     426
+    ],
+    "slave": [
+     424,
+     427,
+     417,
+     422
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 425,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #12",
+   "hex": "aa21fb0301aa01acffff01aa01a901ab01a101a5000004f0003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1264,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     426,
+     428,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     421
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #13",
+   "hex": "aa21fb0301ab01abffff01ab01a801ab01a101a600000554003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1364,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     427,
+     null,
+     427
+    ],
+    "slave": [
+     424,
+     427,
+     417,
+     422
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 427,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #14",
+   "hex": "aa21fb0301ac01acffff01ab01a801aa01a101a5000005b8003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1464,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     428,
+     428,
+     null,
+     427
+    ],
+    "slave": [
+     424,
+     426,
+     417,
+     421
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 427,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #15",
+   "hex": "aa21fb0301aa01acffff01aa01a901ac01a101a600000626003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1574,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     426,
+     428,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     428,
+     417,
+     422
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #16",
+   "hex": "aa21fb0301ab01acffff01ab01a901ab01a001a60000068a003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1674,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     428,
+     null,
+     427
+    ],
+    "slave": [
+     425,
+     427,
+     416,
+     422
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 427,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 416,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #17",
+   "hex": "aa21fb0301ab01adffff01aa01a901ab01a101a7000006ee003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1774,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     429,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #18",
+   "hex": "aa21fb0301ab01acffff01a901a901ab01a001a700000752003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1874,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     428,
+     null,
+     425
+    ],
+    "slave": [
+     425,
+     427,
+     416,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 425,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 416,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #19",
+   "hex": "aa21fb0301ab01adffff01ab01a901ab01a001a7000007b6003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 1974,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     429,
+     null,
+     427
+    ],
+    "slave": [
+     425,
+     427,
+     416,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 427,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 416,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #20",
+   "hex": "aa21fb0301ab01adffff01aa01a801ab01a101a70000081a003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 2074,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     429,
+     null,
+     426
+    ],
+    "slave": [
+     424,
+     427,
+     417,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #21",
+   "hex": "aa21fb0301ab01acffff01a801a801ac01a101a70000087e003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 2174,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     428,
+     null,
+     424
+    ],
+    "slave": [
+     424,
+     428,
+     417,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 424,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #22",
+   "hex": "aa21fb0301ab01adffff01aa01a901ab01a101a7000008e2003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 2274,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     429,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #23",
+   "hex": "aa21fb0301ab01acffff01aa01a901ab01a101a600000950003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 2384,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     428,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     427,
+     417,
+     422
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real raw #24",
+   "hex": "aa21fb0301ab01adffff01aa01a901aa01a001a7000009be003000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 2494,
+    "state": 3,
+    "age": 0,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     427,
+     429,
+     null,
+     426
+    ],
+    "slave": [
+     425,
+     426,
+     416,
+     423
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 426,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 416,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "real min #0",
+   "hex": "aa222f0301aa01a2000000000000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 0,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 418,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #1",
+   "hex": "aa222f0301aa01a0000000640000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 100,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 416,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #2",
+   "hex": "aa222f0301aa01a1000000c90000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 201,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #3",
+   "hex": "aa222f0301a801a10000012d0000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 301,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 424,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #4",
+   "hex": "aa222f0301a901a0000001910000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 401,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 425,
+    "slave_min": 416,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #5",
+   "hex": "aa22230301aa01a1000001f50000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 501,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 417,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #6",
+   "hex": "aa22230301ab01a2000002590000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 601,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 427,
+    "slave_min": 418,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #7",
+   "hex": "aa222f0301ab01a0000002c70000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 711,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 427,
+    "slave_min": 416,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #8",
+   "hex": "aa222f0301a901a00000032b0000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 811,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 425,
+    "slave_min": 416,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #9",
+   "hex": "aa222f0301a901a00000038f0000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 911,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 425,
+    "slave_min": 416,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #10",
+   "hex": "aa222f0301a901a0000003f30000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1011,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 425,
+    "slave_min": 416,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #11",
+   "hex": "aa222f0301aa01a1000004610000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1121,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #12",
+   "hex": "aa22230301a901a0000004c50000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1221,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 425,
+    "slave_min": 416,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #13",
+   "hex": "aa222f0301a801a1000005290000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1321,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 424,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #14",
+   "hex": "aa222f0301aa019f0000058d0000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1421,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 415,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #15",
+   "hex": "aa22230301ab01a0000005fb0000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1531,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 427,
+    "slave_min": 416,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #16",
+   "hex": "aa222f0301ab01a10000065f0000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1631,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 427,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #17",
+   "hex": "aa222f0301ab01a1000006c30000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1731,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 427,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #18",
+   "hex": "aa222f0301aa01a1000007270000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1831,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #19",
+   "hex": "aa222f0301a901a10000078b0000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 1931,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 425,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #20",
+   "hex": "aa22230301aa01a0000007f90000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 2041,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 416,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #21",
+   "hex": "aa222f0301a901a10000085d0000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 2141,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 425,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #22",
+   "hex": "aa22230301a901a1000008c10000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 2241,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 425,
+    "slave_min": 417,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #23",
+   "hex": "aa22230301aa01a1000009250000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 2341,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 417,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "real min #24",
+   "hex": "aa222f0301aa01a0000009930000",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 2451,
+    "state": 3,
+    "age": 0,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 426,
+    "slave_min": 416,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  }
+ ],
+ "synthetic": [
+  {
+   "name": "raw v2: all ok",
+   "hex": "aa21ff0301a701a9019a01a701a801ad01a101a901020304020000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 15,
+    "slave_mask": 15,
+    "master": [
+     423,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v2: all ok",
+   "hex": "aa222b03019a01a1fffffff00200",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 410,
+    "slave_min": 417,
+    "master_idx": 2,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: all ok",
+   "hex": "aa11ff0301a701a9019a01a701a801ad01a101a90102030402",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 15,
+    "slave_mask": 15,
+    "master": [
+     423,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v1: all ok",
+   "hex": "aa122b03019a01a1fffffff002",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 410,
+    "slave_min": 417,
+    "master_idx": 2,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: master J3 fault (real bench state)",
+   "hex": "aa21fb0301a701a9ffff01a701a801ad01a101a901020304023000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     423,
+     425,
+     null,
+     423
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 423,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v2: master J3 fault (real bench state)",
+   "hex": "aa22230301a701a1fffffff00200",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 423,
+    "slave_min": 417,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: master J3 fault (real bench state)",
+   "hex": "aa11fb0301a701a9ffff01a701a801ad01a101a90102030402",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 11,
+    "slave_mask": 15,
+    "master": [
+     423,
+     425,
+     null,
+     423
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     0,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 423,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v1: master J3 fault (real bench state)",
+   "hex": "aa12230301a701a1fffffff002",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 423,
+    "slave_min": 417,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: master J2 too close",
+   "hex": "aa21fd0301a7ffff019a01a701a801ad01a101a901020304020400",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 13,
+    "slave_mask": 15,
+    "master": [
+     423,
+     null,
+     410,
+     423
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     0,
+     1,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 1,
+    "master_min": null,
+    "master_idx": 1,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v2: master J2 too close",
+   "hex": "aa222603ffff01a1fffffff00201",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 2,
+    "slave_mask": 0,
+    "master_min": null,
+    "slave_min": 417,
+    "master_idx": 1,
+    "slave_idx": 2,
+    "munit": 1,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: master J2 too close",
+   "hex": "aa11fd0301a7ffff019a01a701a801ad01a101a90102030402",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 13,
+    "slave_mask": 15,
+    "master": [
+     423,
+     null,
+     410,
+     423
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     0,
+     3,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v1: master J2 too close",
+   "hex": "aa122603ffff01a1fffffff002",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 2,
+    "slave_mask": 0,
+    "master_min": null,
+    "slave_min": 417,
+    "master_idx": 1,
+    "slave_idx": 2,
+    "munit": 3,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: too close wins over a smaller valid value",
+   "hex": "aa21f703000f012c0190ffff01a801ad01a101a901020304024000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 7,
+    "slave_mask": 15,
+    "master": [
+     15,
+     300,
+     400,
+     null
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 1,
+    "master_min": null,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v2: too close wins over a smaller valid value",
+   "hex": "aa222e03ffff01a1fffffff00201",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 2,
+    "slave_mask": 0,
+    "master_min": null,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 1,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: too close wins over a smaller valid value",
+   "hex": "aa11f703000f012c0190ffff01a801ad01a101a90102030402",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 7,
+    "slave_mask": 15,
+    "master": [
+     15,
+     300,
+     400,
+     null
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     3
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 15,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v1: too close wins over a smaller valid value",
+   "hex": "aa122e03ffff01a1fffffff002",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 2,
+    "slave_mask": 0,
+    "master_min": null,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 3,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: slave nothing in range",
+   "hex": "aa210f0301a701a9019a01a7ffffffffffffffff010203040200aa",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 15,
+    "slave_mask": 0,
+    "master": [
+     423,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     null,
+     null,
+     null,
+     null
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     2,
+     2,
+     2,
+     2
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 2,
+    "slave_min": null,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v2: slave nothing in range",
+   "hex": "aa220903019afffffffffff00208",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 1,
+    "slave_mask": 0,
+    "master_min": 410,
+    "slave_min": null,
+    "master_idx": 2,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 2,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: slave nothing in range",
+   "hex": "aa110f0301a701a9019a01a7ffffffffffffffff0102030402",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 15,
+    "slave_mask": 0,
+    "master": [
+     423,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     null,
+     null,
+     null,
+     null
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     3,
+     3,
+     3,
+     3
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 3,
+    "slave_min": null,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v1: slave nothing in range",
+   "hex": "aa120903019afffffffffff002",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 1,
+    "slave_mask": 0,
+    "master_min": 410,
+    "slave_min": null,
+    "master_idx": 2,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 3,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: slave mixed no target and fault",
+   "hex": "aa210f0301a701a9019a01a7ffffffffffffffff010203040200be",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 15,
+    "slave_mask": 0,
+    "master": [
+     423,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     null,
+     null,
+     null,
+     null
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     2,
+     3,
+     3,
+     2
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 2,
+    "slave_min": null,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v2: slave mixed no target and fault",
+   "hex": "aa220903019afffffffffff00208",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 1,
+    "slave_mask": 0,
+    "master_min": 410,
+    "slave_min": null,
+    "master_idx": 2,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 2,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: slave mixed no target and fault",
+   "hex": "aa110f0301a701a9019a01a7ffffffffffffffff0102030402",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 15,
+    "slave_mask": 0,
+    "master": [
+     423,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     null,
+     null,
+     null,
+     null
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     3,
+     3,
+     3,
+     3
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 3,
+    "slave_min": null,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v1: slave mixed no target and fault",
+   "hex": "aa120903019afffffffffff002",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 1,
+    "slave_mask": 0,
+    "master_min": 410,
+    "slave_min": null,
+    "master_idx": 2,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 3,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: slave disconnected",
+   "hex": "aa210f0201a701a9019a01a7ffffffffffffffff01020304ff00ff",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 2,
+    "age": 255,
+    "master_mask": 15,
+    "slave_mask": 0,
+    "master": [
+     423,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     null,
+     null,
+     null,
+     null
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     3,
+     3,
+     3,
+     3
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 3,
+    "slave_min": null,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v2: slave disconnected",
+   "hex": "aa220902019afffffffffff0ff0c",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 2,
+    "age": 255,
+    "master_mask": 1,
+    "slave_mask": 0,
+    "master_min": 410,
+    "slave_min": null,
+    "master_idx": 2,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 3,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: slave disconnected",
+   "hex": "aa110f0201a701a9019a01a7ffffffffffffffff01020304ff",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 2,
+    "age": 255,
+    "master_mask": 15,
+    "slave_mask": 0,
+    "master": [
+     423,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     null,
+     null,
+     null,
+     null
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     3,
+     3,
+     3,
+     3
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 3,
+    "slave_min": null,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v1: slave disconnected",
+   "hex": "aa120902019afffffffffff0ff",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 2,
+    "age": 255,
+    "master_mask": 1,
+    "slave_mask": 0,
+    "master_min": 410,
+    "slave_min": null,
+    "master_idx": 2,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 3,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: master all fault",
+   "hex": "aa21f003ffffffffffffffff01a801ad01a101a90102030402ff00",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 0,
+    "slave_mask": 15,
+    "master": [
+     null,
+     null,
+     null,
+     null
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     3,
+     3,
+     3,
+     3
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 3,
+    "master_min": null,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v2: master all fault",
+   "hex": "aa222203ffff01a1fffffff00203",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 2,
+    "slave_mask": 0,
+    "master_min": null,
+    "slave_min": 417,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 3,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: master all fault",
+   "hex": "aa11f003ffffffffffffffff01a801ad01a101a90102030402",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 0,
+    "slave_mask": 15,
+    "master": [
+     null,
+     null,
+     null,
+     null
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     425
+    ],
+    "mstates": [
+     3,
+     3,
+     3,
+     3
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 3,
+    "master_min": null,
+    "master_idx": 0,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v1: master all fault",
+   "hex": "aa122203ffff01a1fffffff002",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 2,
+    "slave_mask": 0,
+    "master_min": null,
+    "slave_min": 417,
+    "master_idx": 0,
+    "slave_idx": 2,
+    "munit": 3,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: both units too close",
+   "hex": "aa217e03ffff01a9019a01a701a801ad01a1ffff01020304020140",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 14,
+    "slave_mask": 7,
+    "master": [
+     null,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     null
+    ],
+    "mstates": [
+     1,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "munit": 1,
+    "master_min": null,
+    "master_idx": 0,
+    "sunit": 1,
+    "slave_min": null,
+    "slave_idx": 3
+   }
+  },
+  {
+   "name": "min v2: both units too close",
+   "hex": "aa223003fffffffffffffff00205",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 0,
+    "slave_mask": 0,
+    "master_min": null,
+    "slave_min": null,
+    "master_idx": 0,
+    "slave_idx": 3,
+    "munit": 1,
+    "sunit": 1,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: both units too close",
+   "hex": "aa117e03ffff01a9019a01a701a801ad01a1ffff0102030402",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 14,
+    "slave_mask": 7,
+    "master": [
+     null,
+     425,
+     410,
+     423
+    ],
+    "slave": [
+     424,
+     429,
+     417,
+     null
+    ],
+    "mstates": [
+     3,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     3
+    ],
+    "munit": 0,
+    "master_min": 410,
+    "master_idx": 2,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v1: both units too close",
+   "hex": "aa123003fffffffffffffff002",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 0,
+    "slave_mask": 0,
+    "master_min": null,
+    "slave_min": null,
+    "master_idx": 0,
+    "slave_idx": 3,
+    "munit": 3,
+    "sunit": 3,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: tie keeps the first sensor",
+   "hex": "aa21ff03012c00c800c8019000fa00fa0104010e01020304030000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 3,
+    "master_mask": 15,
+    "slave_mask": 15,
+    "master": [
+     300,
+     200,
+     200,
+     400
+    ],
+    "slave": [
+     250,
+     250,
+     260,
+     270
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 200,
+    "master_idx": 1,
+    "sunit": 0,
+    "slave_min": 250,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v2: tie keeps the first sensor",
+   "hex": "aa22070300c800fafffffff00300",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 3,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 200,
+    "slave_min": 250,
+    "master_idx": 1,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: tie keeps the first sensor",
+   "hex": "aa11ff03012c00c800c8019000fa00fa0104010e0102030403",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 3,
+    "master_mask": 15,
+    "slave_mask": 15,
+    "master": [
+     300,
+     200,
+     200,
+     400
+    ],
+    "slave": [
+     250,
+     250,
+     260,
+     270
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 200,
+    "master_idx": 1,
+    "sunit": 0,
+    "slave_min": 250,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v1: tie keeps the first sensor",
+   "hex": "aa12070300c800fafffffff003",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 3,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 200,
+    "slave_min": 250,
+    "master_idx": 1,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: ok plus no target gives the ok minimum",
+   "hex": "aa21da03ffff01a9ffff01a701a8ffff01a101a901020304022208",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 10,
+    "slave_mask": 13,
+    "master": [
+     null,
+     425,
+     null,
+     423
+    ],
+    "slave": [
+     424,
+     null,
+     417,
+     425
+    ],
+    "mstates": [
+     2,
+     0,
+     2,
+     0
+    ],
+    "sstates": [
+     0,
+     2,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 423,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v2: ok plus no target gives the ok minimum",
+   "hex": "aa222f0301a701a1fffffff00200",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 423,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: ok plus no target gives the ok minimum",
+   "hex": "aa11da03ffff01a9ffff01a701a8ffff01a101a90102030402",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 2,
+    "master_mask": 10,
+    "slave_mask": 13,
+    "master": [
+     null,
+     425,
+     null,
+     423
+    ],
+    "slave": [
+     424,
+     null,
+     417,
+     425
+    ],
+    "mstates": [
+     3,
+     0,
+     3,
+     0
+    ],
+    "sstates": [
+     0,
+     3,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 423,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 417,
+    "slave_idx": 2
+   }
+  },
+  {
+   "name": "min v1: ok plus no target gives the ok minimum",
+   "hex": "aa122f0301a701a1fffffff002",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 2,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 423,
+    "slave_min": 417,
+    "master_idx": 3,
+    "slave_idx": 2,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v2: large values and time",
+   "hex": "aa21ff030320031f04b000140015028a02bc02ee01020304090000",
+   "ref": {
+    "kind": "raw",
+    "proto": 2,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 9,
+    "master_mask": 15,
+    "slave_mask": 15,
+    "master": [
+     800,
+     799,
+     1200,
+     20
+    ],
+    "slave": [
+     21,
+     650,
+     700,
+     750
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 20,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 21,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v2: large values and time",
+   "hex": "aa220f0300140015fffffff00900",
+   "ref": {
+    "kind": "min",
+    "proto": 2,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 9,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 20,
+    "slave_min": 21,
+    "master_idx": 3,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  },
+  {
+   "name": "raw v1: large values and time",
+   "hex": "aa11ff030320031f04b000140015028a02bc02ee0102030409",
+   "ref": {
+    "kind": "raw",
+    "proto": 1,
+    "t_ms": 16909060,
+    "state": 3,
+    "age": 9,
+    "master_mask": 15,
+    "slave_mask": 15,
+    "master": [
+     800,
+     799,
+     1200,
+     20
+    ],
+    "slave": [
+     21,
+     650,
+     700,
+     750
+    ],
+    "mstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "sstates": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "munit": 0,
+    "master_min": 20,
+    "master_idx": 3,
+    "sunit": 0,
+    "slave_min": 21,
+    "slave_idx": 0
+   }
+  },
+  {
+   "name": "min v1: large values and time",
+   "hex": "aa120f0300140015fffffff009",
+   "ref": {
+    "kind": "min",
+    "proto": 1,
+    "t_ms": 4294967280,
+    "state": 3,
+    "age": 9,
+    "master_mask": 3,
+    "slave_mask": 0,
+    "master_min": 20,
+    "slave_min": 21,
+    "master_idx": 3,
+    "slave_idx": 0,
+    "munit": 0,
+    "sunit": 0,
+    "master": [],
+    "slave": [],
+    "mstates": [],
+    "sstates": []
+   }
+  }
+ ]
+}
