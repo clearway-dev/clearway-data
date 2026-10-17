@@ -8,8 +8,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "tech.zephyron.clearway",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "ClearWay potřebuje přístup k vaší poloze pro měření šířky silnic během jízdy."
+        "NSLocationWhenInUseUsageDescription": "ClearWay potřebuje přístup k vaší poloze pro měření šířky silnic během jízdy.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -19,7 +21,10 @@
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT"
       ],
       "package": "cz.zephyron.clearwaymobileapp"
     },

@@ -13,9 +13,19 @@
     },
     "production": {
       "autoIncrement": true
+    },
+    "testflight": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "ios": {
+        "resourceClass": "m-medium"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "testflight": {
+      "ios": {}
+    }
   }
 }
