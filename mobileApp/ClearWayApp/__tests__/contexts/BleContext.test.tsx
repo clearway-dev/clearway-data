@@ -172,8 +172,8 @@ describe('measurement control', () => {
       await ctx.result.current.connect();
     });
     await waitFor(() => expect(ctx.fake.written).toEqual(['V', 'A1', 'A0', 'R10']), { timeout: 3000 });
-    expect(ctx.result.current.mode).toBe('min');
-    expect(ctx.result.current.error).toContain('RAW');
+    await waitFor(() => expect(ctx.result.current.mode).toBe('min'));
+    await waitFor(() => expect(ctx.result.current.error).toContain('RAW'));
   });
 });
 
