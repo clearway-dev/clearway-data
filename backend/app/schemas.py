@@ -134,8 +134,8 @@ class RawMeasurementCreateLax(BaseModel):
     longitude: float = Field(..., description="Longitude in decimal degrees")
     distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
     distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
-    speed: float = Field(..., description="Vehicle speed in m/s")
-    accuracy_gps: float = Field(..., description="GPS horizontal accuracy in meters")
+    speed: float | None = Field(..., description="Vehicle speed in m/s; null when GPS does not report it")
+    accuracy_gps: float | None = Field(..., description="GPS horizontal accuracy in meters; null when GPS does not report it")
 
 
 class RawMeasurementCreate(BaseModel):
@@ -149,8 +149,8 @@ class RawMeasurementCreate(BaseModel):
     longitude: float = Field(..., description="Longitude in decimal degrees")
     distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
     distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
-    speed: float = Field(..., description="Vehicle speed in m/s")
-    accuracy_gps: float = Field(..., description="GPS horizontal accuracy in meters")
+    speed: float | None = Field(..., description="Vehicle speed in m/s; null when GPS does not report it")
+    accuracy_gps: float | None = Field(..., description="GPS horizontal accuracy in meters; null when GPS does not report it")
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -176,8 +176,8 @@ class RawMeasurementResponse(BaseModel):
     longitude: float
     distance_left: float
     distance_right: float
-    speed: float
-    accuracy_gps: float
+    speed: float | None
+    accuracy_gps: float | None
     is_valid: bool
     created_at: datetime
 
@@ -198,8 +198,8 @@ class MeasurementItem(BaseModel):
     longitude: float = Field(..., description="Longitude in decimal degrees")
     distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
     distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
-    speed: float = Field(..., description="Vehicle speed in m/s")
-    accuracy_gps: float = Field(..., description="GPS horizontal accuracy in meters")
+    speed: float | None = Field(..., description="Vehicle speed in m/s; null when GPS does not report it")
+    accuracy_gps: float | None = Field(..., description="GPS horizontal accuracy in meters; null when GPS does not report it")
 
 
 class MeasurementItemLax(BaseModel):
@@ -212,8 +212,8 @@ class MeasurementItemLax(BaseModel):
     longitude: float = Field(..., description="Longitude in decimal degrees")
     distance_left: float = Field(..., description="Distance to left obstacle in centimeters")
     distance_right: float = Field(..., description="Distance to right obstacle in centimeters")
-    speed: float = Field(..., description="Vehicle speed in m/s")
-    accuracy_gps: float = Field(..., description="GPS horizontal accuracy in meters")
+    speed: float | None = Field(..., description="Vehicle speed in m/s; null when GPS does not report it")
+    accuracy_gps: float | None = Field(..., description="GPS horizontal accuracy in meters; null when GPS does not report it")
 
 
 class BatchMeasurementCreate(BaseModel):

@@ -127,6 +127,62 @@ class TestUsersMe:
         assert response.status_code == 401
 
 
+class TestUsersMeThroughRealDependency:
+    """
+    Login followed by repeated GET /users/me with the real get_current_user (no stub), exactly what
+    the mobile app does. The second call is served from the user cache; it used to fail with a 500
+    because the cached object lacked full_name.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _fresh_cache(self):
+        import app.deps as deps_module
+        deps_module._user_cache.clear()
+        yield
+        deps_module._user_cache.clear()
+
+    def _login(self, db):
+        app.dependency_overrides[get_db] = lambda: db
+        response = client.post(
+            "/api/v1/auth/login/access-token",
+            data={"username": "user@test.com", "password": "testpassword"},
+        )
+        assert response.status_code == 200
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    def test_users_me_works_on_every_call_not_only_the_first(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = _MOCK_USER
+        headers = self._login(db)
+
+        statuses = [client.get("/api/v1/auth/users/me", headers=headers).status_code for _ in range(5)]
+
+        assert statuses == [200] * 5
+
+    def test_cached_response_equals_the_first_response(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = _MOCK_USER
+        headers = self._login(db)
+
+        first = client.get("/api/v1/auth/users/me", headers=headers).json()
+        cached = client.get("/api/v1/auth/users/me", headers=headers).json()
+
+        assert cached == first
+        assert cached["full_name"] == "Test User"
+        assert cached["email"] == "user@test.com"
+        assert "hashed_password" not in cached
+
+    def test_a_second_login_within_the_ttl_still_returns_the_profile(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = _MOCK_USER
+        client.get("/api/v1/auth/users/me", headers=self._login(db))  # fills the cache
+
+        response = client.get("/api/v1/auth/users/me", headers=self._login(db))  # new token, cache hit
+
+        assert response.status_code == 200
+        assert response.json()["role"] == "dispatcher"
+
+
 # ===========================================================================
 # GET /api/v1/auth/users  (admin only)
 # ===========================================================================

@@ -28,8 +28,8 @@ def clear_user_cache():
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _user(email="user@test.com", role="dispatcher", is_active=True, id=1):
-    return types.SimpleNamespace(id=id, email=email, role=role, is_active=is_active)
+def _user(email="user@test.com", role="dispatcher", is_active=True, id=1, full_name="Test User"):
+    return types.SimpleNamespace(id=id, email=email, role=role, is_active=is_active, full_name=full_name)
 
 
 def _db_returning(user):
@@ -121,6 +121,35 @@ class TestGetCurrentUser:
         assert result.email == "check@example.com"
         assert result.role == "admin"
         assert result.is_active is True
+
+    def test_cached_user_exposes_every_field_of_UserOut(self):
+        """Regression: the cache hit lacked full_name, so GET /auth/users/me failed with a
+        ResponseValidationError (HTTP 500, which browsers report as a CORS error) on every call
+        after the first one within the cache TTL."""
+        from app.schemas import UserOut
+
+        user = _user(email="out@example.com", role="admin", full_name="Ing. Petr Správce")
+        db = _db_returning(user)
+        token = _valid_token(email="out@example.com", role="admin")
+
+        get_current_user(token=token, db=db)   # populate cache
+        cached = get_current_user(token=token, db=db)  # served from cache
+
+        out = UserOut.model_validate(cached)   # raises if any field is missing
+        assert out.full_name == "Ing. Petr Správce"
+        assert out.email == "out@example.com"
+
+    def test_cached_user_keeps_a_missing_full_name_as_none(self):
+        from app.schemas import UserOut
+
+        user = _user(email="noname@example.com", full_name=None)
+        db = _db_returning(user)
+        token = _valid_token(email="noname@example.com")
+
+        get_current_user(token=token, db=db)
+        cached = get_current_user(token=token, db=db)
+
+        assert UserOut.model_validate(cached).full_name is None
 
 
 # ===========================================================================

@@ -18,6 +18,7 @@ class _CachedUser:
     """Plain data object — not bound to any SQLAlchemy session."""
     id: int
     email: str
+    full_name: str | None
     role: str
     is_active: bool
 
@@ -56,7 +57,13 @@ def get_current_user(
         raise credentials_exception
 
     _user_cache[token_data.email] = (
-        _CachedUser(id=user.id, email=user.email, role=user.role, is_active=user.is_active),
+        _CachedUser(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+            is_active=user.is_active,
+        ),
         time.time(),
     )
     return user
